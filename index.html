@@ -6,11 +6,18 @@
 <title>Lesson Plans</title>
 <style>
   body { font-family: Arial, Helvetica, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #222; background: #faf9f6; }
-  h1 { font-size: 26px; margin-bottom: 2px; }
-  h2 { font-size: 20px; margin-top: 32px; border-bottom: 2px solid #2b6cb0; padding-bottom: 4px; }
+  h1 { font-size: 26px; margin-bottom: 2px; background: #2b6cb0; color: #fff; padding: 12px 16px; border-radius: 10px; }
+  h2 { font-size: 20px; margin-top: 32px; border-bottom: 2px solid #2b6cb0; padding-bottom: 4px; color: #2b6cb0; }
   h3 { font-size: 16px; margin: 14px 0 4px; }
   .note { color: #555; font-size: 14px; }
   #connBanner { position: sticky; top: 0; z-index: 50; padding: 8px 10px; border-radius: 6px; font-weight: bold; }
+  #tDayCards .card { background: #eef4fb; border-left: 5px solid #2b6cb0; }
+  .card.section-entered { background: #f4faf4; border-left: 5px solid #2e7d32; }
+  .card.section-standards { background: #eaf5ea; border-left: 5px solid #2e7d32; }
+  .card.section-resources { background: #eef4fb; border-left: 5px solid #2b6cb0; }
+  .card.section-email { background: #f3eefb; border-left: 5px solid #6a4c93; }
+  #teacherPrint, #principalPrint, #detailPrint { background: #fff8e1; border: 1px solid #e6c87a; border-radius: 10px; padding: 14px 16px; }
+  select:disabled { background: #eee; color: #666; }
   .card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   label { font-weight: bold; font-size: 14px; }
@@ -91,7 +98,15 @@
     </div>
     <p class="note" style="margin-bottom:0;">Write each day freehand. Pick the resource from this subject's inventory and add pages or chapters. The standards list below is your reference — check a standard for the week it is taught. The date lands inside that week, and teaching it again in a later week adds another date. When a subject's week is done, hit Add Week — it saves and checks that subject off in Subjects Entered.</p>
   </div>
-  <div class="card">
+  <div class="card section-resources">
+    <h3 style="margin-top:0;">Resources — <span id="tResSubject"></span></h3>
+    <p class="note">Books and workbooks for this subject. Add one here and it saves to the Setup inventory, so it appears in the resource dropdown on every day card.</p>
+    <div id="tResList"></div>
+    <div class="row"><input type="text" id="newTeacherResource" placeholder="Book or workbook title" style="flex:1; min-width:180px;">
+    <select id="newTeacherResourceKind"><option>Book</option><option>Workbook</option><option>Other</option></select>
+    <button data-action="add-teacher-resource">Add resource</button> <span id="teacherResourceMsg" class="note"></span></div>
+  </div>
+  <div class="card section-entered">
     <h3 style="margin-top:0;">Subjects Entered — week of <span id="enteredWeek"></span></h3>
     <p class="note">Click a subject to open it for editing. A check means you hit Add Week for that subject this week — it does not lock it.</p>
     <div id="subjectsEntered"></div>
@@ -102,7 +117,7 @@
   <h2>Week at a glance</h2>
   <div id="weekGlance" class="card"></div>
   <h2>Standards</h2>
-  <div class="card">
+  <div class="card section-standards">
     <div class="row"><span id="tProgressText" style="font-weight:bold;"></span></div>
     <div class="bar" style="margin-top:8px;"><div id="tProgressBar" style="width:0%"></div></div>
     <div class="row" style="margin:10px 0;">
@@ -119,7 +134,7 @@
   <div id="teacherPrint"><div id="tSummaryAgenda"></div></div>
   <p style="margin-top:12px;"><button data-action="print-teacher">Print this summary</button> <button data-action="copy-teacher" class="gray">Copy summary</button> <span id="copyTeacherMsg" class="note"></span></p>
   <h2>Weekly email draft</h2>
-  <div class="card">
+  <div class="card section-email">
     <p class="note">A starting draft built from this grade-week's plans and standards taught. Edit it freely, then copy it into your email — nothing is sent from here.</p>
     <div class="row"><label>Subject <input type="text" id="emailSubject" style="min-width:320px;"></label> <button data-action="copy-email-subject" class="gray small">Copy subject</button></div>
     <div id="emailPreview" contenteditable="true" style="border:1px solid #ccc; border-radius:6px; padding:10px; margin:12px 0; background:#fff;"></div>
@@ -145,6 +160,17 @@
   </div>
   <div id="principalPrint"><div id="pSummary"></div></div>
   <p style="margin-top:12px;"><button data-action="print-principal">Print this summary</button> <button data-action="copy-principal" class="gray">Copy summary</button> <span id="copyPrincipalMsg" class="note"></span></p>
+  <h2>Week detail — a teacher's week</h2>
+  <div class="card">
+    <div class="row">
+      <label>Grade <select id="dGradeSel"></select></label>
+      <label>Week of (Monday) <input type="date" id="dWeek"></label>
+      <button data-action="show-detail">Show week detail</button>
+    </div>
+    <p class="note">Shows everything the teacher entered for that grade-week: each subject's day plans, notes, and standards taught that week — the same content as the teacher's weekly summary. Read-only: editing stays on the teacher's page.</p>
+  </div>
+  <div id="detailPrint"><div id="dSummary"></div></div>
+  <p style="margin-top:12px;"><button data-action="copy-detail" class="gray">Copy detail</button> <span id="copyDetailMsg" class="note"></span></p>
 </div>
 
 <p style="margin-top:24px;"><button data-action="clear-demo" class="gray small">Clear demo data</button></p>
@@ -202,7 +228,7 @@ function normalizeTaught() {
   if (!S.standards) S.standards = {};
 }
 normalizeTaught();
-let UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all" };
+let UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all", dGrade: "Grade 4", dWeek: mondayOf(new Date()) };
 let LOCKED_VIEW = null; // v3.1: set from ?view= — when set, only that tab's button shows
 function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} const el = document.getElementById("savedLine"); if (el) el.textContent = (CONN_STATE === "connected" ? "Saved ✓ " : "Saved in this browser only ⚠ ") + new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
 const gk = (g, s) => g + "|" + s;
@@ -413,6 +439,15 @@ function renderTeacher() {
   renderSubjectsEntered();
   renderWeekGlance();
   renderEmailDraft(false);
+  renderTeacherResources();
+}
+function renderTeacherResources() {
+  const subj = $("#tResSubject");
+  if (subj) subj.textContent = UI.tSubject;
+  const list = $("#tResList");
+  if (!list) return;
+  const res = S.resources[gk(UI.tGrade, UI.tSubject)] || [];
+  list.innerHTML = res.length ? res.map(r => '<span class="chip">' + esc(r.title) + " (" + esc(r.kind) + ")</span>").join("") : '<span class="note">No resources yet for this subject — add one below.</span>';
 }
 function renderSubjectsEntered() {
   const g = UI.tGrade;
@@ -439,23 +474,22 @@ function renderWeekGlance() {
   html += "</table><p class=\"note\">Click a subject name or a check to open that subject for editing.</p>";
   $("#weekGlance").innerHTML = html;
 }
-function renderTeacherSummary() {
-  const g = UI.tGrade;
+function weekSummaryHtml(g, week) {
   const subs = S.subjects[g] || [];
-  let html = "<h2>Weekly summary — " + esc(g) + " — week of " + esc(fmtDate(UI.tWeek)) + "</h2>";
+  let html = "<h2>Weekly summary — " + esc(g) + " — week of " + esc(fmtDate(week)) + "</h2>";
   subs.forEach(s => {
     const days = (S.days[gk(g, s)] || []).slice().sort((a, b) => a - b);
     const res = S.resources[gk(g, s)] || [];
     html += "<h3>" + esc(s) + "</h3>";
     html += days.length ? days.map(i => {
-      const d = planDay(g, s, UI.tWeek, dayKey(i));
+      const d = planDay(g, s, week, dayKey(i));
       const r = d.resourceId ? (res.find(x => x.id === d.resourceId) || {}) : {};
       const ref = r.title ? " (" + esc(r.title) + (d.pages ? ", " + esc(d.pages) : "") + ")" : (d.pages ? " (" + esc(d.pages) + ")" : "");
-      return "<p><strong>" + dayDate(UI.tWeek, i) + ref + "</strong><br>Classwork: " + (d.classwork ? esc(d.classwork) : "<em>nothing written</em>") + "<br>Homework: " + (d.homework ? esc(d.homework) : "<em>nothing written</em>") + "</p>";
+      return "<p><strong>" + dayDate(week, i) + ref + "</strong><br>Classwork: " + (d.classwork ? esc(d.classwork) : "<em>nothing written</em>") + "<br>Homework: " + (d.homework ? esc(d.homework) : "<em>nothing written</em>") + "</p>";
     }).join("") : "<p><em>No teaching days set.</em></p>";
-    const nt = S.notes[pk(g, s, UI.tWeek)];
+    const nt = S.notes[pk(g, s, week)];
     if (nt) html += "<p><strong>Notes:</strong> " + esc(nt) + "</p>";
-    const wr = weekRange(UI.tWeek);
+    const wr = weekRange(week);
     const tStd = (standardsFor(g, s) ? standardsFor(g, s).list : []).filter(x => (S.taught[x[1]] || []).some(dt => dt >= wr[0] && dt <= wr[1]));
     if (tStd.length) {
       html += "<p><strong>Standards taught this week:</strong></p><ul>" + tStd.map(x => {
@@ -463,11 +497,33 @@ function renderTeacherSummary() {
         return "<li><strong>" + esc(x[1]) + "</strong> (" + esc(ds) + ") — " + esc(x[2]) + "</li>";
       }).join("") + "</ul>";
     }
+    const ent = (S.entered[g + "|" + week] || {})[s];
+    html += "<p class=\"note\">" + (ent ? "✓ Week entered for this subject." : "○ Week not yet entered for this subject (Add Week not hit).") + "</p>";
   });
-  $("#tSummaryAgenda").innerHTML = html;
+  return html;
+}
+function renderTeacherSummary() {
+  $("#tSummaryAgenda").innerHTML = weekSummaryHtml(UI.tGrade, UI.tWeek);
   const notes = $("#tNotes");
-  const key = pk(g, UI.tSubject, UI.tWeek);
+  const key = pk(UI.tGrade, UI.tSubject, UI.tWeek);
   if (notes && document.activeElement !== notes) notes.value = S.notes[key] || "";
+}
+function renderDetail() {
+  if (!S.grades.includes(UI.dGrade)) UI.dGrade = S.grades[0] || "";
+  $("#dGradeSel").innerHTML = gradeOptions(UI.dGrade);
+  $("#dWeek").value = UI.dWeek;
+  const g = UI.dGrade, week = UI.dWeek;
+  const subs = S.subjects[g] || [];
+  const wr = weekRange(week);
+  const hasAny = subs.some(s => {
+    const plans = S.plans[pk(g, s, week)] || {};
+    const days = S.days[gk(g, s)] || [];
+    if (days.some(i => { const d = plans[dayKey(i)] || {}; return d.classwork || d.homework; })) return true;
+    if (S.notes[pk(g, s, week)]) return true;
+    const std = standardsFor(g, s);
+    return std ? std.list.some(x => (S.taught[x[1]] || []).some(dt => dt >= wr[0] && dt <= wr[1])) : false;
+  });
+  $("#dSummary").innerHTML = hasAny ? weekSummaryHtml(g, week) : "<p><em>Nothing entered for " + esc(g) + " — week of " + esc(fmtDate(week)) + " yet.</em></p>";
 }
 function copyArea(areaSel, msgSel) {
   const el = $(areaSel);
@@ -561,7 +617,29 @@ function renderPrincipal() {
     html += "<p><strong>" + esc(g) + " " + esc(s) + ":</strong> " + n + " of " + list.length + " standards taught overall.</p>";
   }));
   if (!any) html += "<p><em>Nothing planned or taught in this period yet.</em></p>";
+  // Weeks with plans outside the chosen period — the usual reason a
+  // principal sees standards but no plans: the Week view only covers
+  // the week containing the anchor date.
+  const planWeeks = {};
+  Object.keys(S.plans).forEach(k => {
+    const parts = k.split("|");
+    if (!grades.includes(parts[0])) return;
+    const days = S.plans[k];
+    if (Object.values(days).some(d => d.classwork || d.homework)) planWeeks[parts[0] + "|" + parts[2]] = true;
+  });
+  const outside = Object.keys(planWeeks).filter(k => {
+    const w = k.split("|")[1];
+    const fri = new Date(parseD(w)); fri.setDate(fri.getDate() + 4);
+    return iso(fri) < range[0] || w > range[1];
+  }).sort();
+  if (outside.length) {
+    html += "<h3>Plans in other weeks</h3><p class=\"note\">These weeks have plans but fall outside the period above — open one in Week detail below.</p><p>" + outside.map(k => {
+      const parts = k.split("|");
+      return '<button data-action="show-detail-week" data-grade="' + esc(parts[0]) + '" data-week="' + esc(parts[1]) + '">' + esc(parts[0]) + " — week of " + esc(fmtDate(parts[1])) + "</button>";
+    }).join(" ") + "</p>";
+  }
   $("#pSummary").innerHTML = html;
+  renderDetail();
 }
 function renderAll() {
   $$('[data-action="tab"]').forEach(x => {
@@ -640,11 +718,36 @@ document.addEventListener("click", e => {
     const kindEl = document.querySelector('[data-reskind="' + s + '"]');
     const t = titleEl.value.trim();
     if (!t) return;
+    if ((S.resources[gk(g, s)] || []).some(r => r.title === t)) {
+      const msg = $("#setupMsg");
+      if (msg) msg.textContent = "That resource is already in " + g + " " + s + "'s inventory.";
+      titleEl.value = "";
+      return;
+    }
     (S.resources[gk(g, s)] = S.resources[gk(g, s)] || []).push({ id: CONNECTED ? t : "r" + Date.now().toString(36), title: t, kind: kindEl.value });
     titleEl.value = "";
     save();
     gasPost({ action: "addResource", grade: g, subject: s, title: t, kind: kindEl.value });
     renderSetup(); renderTeacher();
+  }
+  else if (act === "add-teacher-resource") {
+    const tg = UI.tGrade, ts = UI.tSubject;
+    const titleEl = $("#newTeacherResource"), kindEl = $("#newTeacherResourceKind");
+    const t = titleEl.value.trim();
+    const msg = $("#teacherResourceMsg");
+    if (!t) { if (msg) msg.textContent = "Type a title first."; return; }
+    const key = gk(tg, ts);
+    if ((S.resources[key] || []).some(r => r.title === t)) {
+      if (msg) msg.textContent = "That resource is already in this subject's inventory.";
+      titleEl.value = "";
+      return;
+    }
+    (S.resources[key] = S.resources[key] || []).push({ id: CONNECTED ? t : "r" + Date.now().toString(36), title: t, kind: kindEl.value });
+    titleEl.value = "";
+    save();
+    gasPost({ action: "addResource", grade: tg, subject: ts, title: t, kind: kindEl.value });
+    renderTeacher();
+    if (msg) msg.textContent = "Added ✓ — it now appears in the resource dropdown on every day card.";
   }
   else if (act === "del-resource") {
     const s = b.dataset.subject, id = b.dataset.id;
@@ -682,7 +785,7 @@ document.addEventListener("click", e => {
     if (!confirm("Clear all demo data (grades, subjects, resources, plans, taught standards)?")) return;
     localStorage.removeItem(LS_KEY);
     S = freshState();
-    UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all" };
+    UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all", dGrade: "Grade 4", dWeek: mondayOf(new Date()) };
     save(); renderAll();
   }
   else if (act === "retry-conn") { location.reload(); }
@@ -740,12 +843,22 @@ document.addEventListener("click", e => {
   else if (act === "copy-email-html") {
     const prev = $("#emailPreview");
     const done = () => { const m = $("#copyEmailMsg"); if (m) m.textContent = "Copied ✓"; };
-    if (navigator.clipboard && window.ClipboardItem) {
-      try {
-        const item = new ClipboardItem({ "text/html": new Blob([prev.innerHTML], { type: "text/html" }), "text/plain": new Blob([prev.innerText], { type: "text/plain" }) });
-        navigator.clipboard.write([item]).then(done).catch(() => fallbackCopy(prev.innerText, done));
-      } catch (e) { fallbackCopy(prev.innerText, done); }
-    } else fallbackCopy(prev.innerText, done);
+    // Copy the RENDERED draft, the way selecting it with the mouse and
+    // pressing Ctrl+C would — this is the form Gmail pastes as formatted
+    // text. (The previous ClipboardItem approach handed Gmail the HTML
+    // in a form some browsers paste as code.)
+    let ok = false;
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(prev);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      ok = document.execCommand("copy");
+      sel.removeAllRanges();
+    } catch (e) { ok = false; }
+    if (ok) done();
+    else fallbackCopy(prev.innerText, done);
   }
   else if (act === "copy-email-text") {
     const prev = $("#emailPreview");
@@ -760,6 +873,14 @@ document.addEventListener("click", e => {
     else if (subj) fallbackCopy(subj.value, done);
   }
   else if (act === "regen-email") { renderEmailDraft(true); }
+  else if (act === "show-detail") { renderDetail(); }
+  else if (act === "copy-detail") { copyArea("#detailPrint", "#copyDetailMsg"); }
+  else if (act === "show-detail-week") {
+    UI.dGrade = b.dataset.grade; UI.dWeek = b.dataset.week;
+    renderDetail();
+    const el = document.getElementById("detailPrint");
+    if (el && el.scrollIntoView) el.scrollIntoView();
+  }
 });
 function dayFieldInput(t) {
   if (!t.dataset.day || !t.dataset.field) return false;
@@ -797,6 +918,8 @@ document.addEventListener("change", e => {
   }
   else if (t.id === "pGradeSel") { UI.pGrade = t.value; renderPrincipal(); }
   else if (t.id === "pAnchor") { UI.pAnchor = t.value; renderPrincipal(); }
+  else if (t.id === "dGradeSel") { UI.dGrade = t.value; renderDetail(); }
+  else if (t.id === "dWeek") { UI.dWeek = mondayOf(parseD(t.value)); renderDetail(); }
   else if (t.dataset.sday) {
     const i = Number(t.dataset.sday), s = t.dataset.subject;
     const key = gk(UI.sGrade, s);
