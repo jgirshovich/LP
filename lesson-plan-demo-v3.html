@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson Plans</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #222; background: #faf9f6; }
+  h1 { font-size: 26px; margin-bottom: 2px; }
+  h2 { font-size: 20px; margin-top: 32px; border-bottom: 2px solid #2b6cb0; padding-bottom: 4px; }
+  h3 { font-size: 16px; margin: 14px 0 4px; }
+  .note { color: #555; font-size: 14px; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  label { font-weight: bold; font-size: 14px; }
+  input[type="text"], input[type="date"], select, textarea { font-size: 15px; padding: 7px 9px; border: 1px solid #bfae5a; border-radius: 6px; background: #fffde7; }
+  input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus { background: #ffffff; outline: 2px solid #2b6cb0; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 64px; }
+  button { font-size: 15px; padding: 8px 14px; border: none; border-radius: 6px; background: #2b6cb0; color: #fff; cursor: pointer; }
+  button.gray { background: #777; }
+  button.green { background: #2e7d32; }
+  button.small { font-size: 13px; padding: 4px 10px; }
+  button.tab { background: #ddd; color: #222; }
+  button.tab.active { background: #2b6cb0; color: #fff; }
+  .chip { display: inline-block; background: #e3eefb; border: 1px solid #9db8d6; border-radius: 999px; padding: 2px 6px 2px 10px; margin: 2px 4px 2px 0; font-size: 13px; font-weight: bold; }
+  .chip button { background: none; color: #b03a2e; padding: 0 2px; font-size: 14px; }
+  .std { padding: 8px 0; border-bottom: 1px solid #eee; }
+  .std .code { font-weight: bold; }
+  .std .taught { color: #2e7d32; font-weight: bold; font-size: 13px; }
+  .std.done { background: #e8f5e9; border-left: 4px solid #2e7d32; padding-left: 8px; }
+  .bar { height: 18px; background: #e5e5e5; border-radius: 999px; overflow: hidden; }
+  .bar > div { height: 100%; background: #2e7d32; }
+  .sig { margin-top: 28px; display: flex; gap: 40px; }
+  .sig div { border-top: 1px solid #000; padding-top: 4px; flex: 1; font-size: 14px; }
+  @media print {
+    body * { visibility: hidden; }
+    .printArea, .printArea * { visibility: visible; }
+    .printArea { position: absolute; top: 0; left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<h1>Lesson Plans</h1>
+<div id="connBanner" class="note" style="margin-bottom:8px;"></div>
+<p class="note"><strong>Demo — data lives in this browser only.</strong> The three tabs below are views, not accounts: Setup is the admin side (grades, subjects, resources), Teacher is data entry, Principal is the summary view. In the real build, teachers get personal links that open only their assigned grade(s), the server rejects writes to another teacher's plan, and the principal's view is a separate roster-checked, read-only link — the demo can't enforce that, so all tabs are visible here.</p>
+
+<div class="row" style="margin-bottom:8px;">
+  <button class="tab" data-action="tab" data-view="setup">Setup (admin)</button>
+  <button class="tab" data-action="tab" data-view="teacher">Teacher</button>
+  <button class="tab" data-action="tab" data-view="principal">Principal</button>
+</div>
+
+<div id="setupSec" style="display:none;">
+  <h2>Setup — grades, subjects, resources</h2>
+  <p class="note">Add grade levels, then per grade add subjects. Each subject gets its own resource inventory (books and workbooks) and teaching days — the teacher picks from that subject's inventory when planning.</p>
+  <div class="card">
+    <h3 style="margin-top:0;">Grade levels</h3>
+    <div id="gradeChips"></div>
+    <div class="row" style="margin-top:8px;">
+      <input type="text" id="newGrade" placeholder="e.g. Grade 5" style="flex:1; min-width:180px;">
+      <button data-action="add-grade">Add grade</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row"><label>Editing grade: <select id="sGradeSel"></select></label></div>
+    <div id="subjectCards"></div>
+    <div class="row" style="margin-top:12px;">
+      <input type="text" id="newSubject" placeholder="New subject name" style="flex:1; min-width:180px;">
+      <button data-action="add-subject">Add subject</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0;">How access works in the real build (not enforced in this demo)</h3>
+    <p class="note">Teachers get personal links that open only their assigned grade(s). The grade list comes from a Teachers roster, and the server rejects any write to a plan the teacher does not own. The principal's view is a separate, roster-checked, read-only link. This demo has no accounts, so every tab is visible here.</p>
+  </div>
+</div>
+
+<div id="teacherSec" style="display:none;">
+  <h2>Teacher — plan the week</h2>
+  <div class="card">
+    <div class="row">
+      <label>Grade <select id="tGradeSel"></select></label>
+      <label>Subject <select id="tSubjectSel"></select></label>
+      <label>Week of (Monday) <input type="date" id="tWeek"></label>
+      <button data-action="save-now">Save</button>
+      <span id="savedLine" class="note"></span>
+    </div>
+    <p class="note" style="margin-bottom:0;">Write each day freehand. Pick the resource from this subject's inventory and add pages or chapters. The standards list below is your reference — check a standard when it has been taught and the date is stamped on it. When a subject's week is done, hit Add Week — it saves and checks that subject off in Subjects Entered.</p>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0;">Subjects Entered — week of <span id="enteredWeek"></span></h3>
+    <p class="note">Click a subject to open it for editing. A check means you hit Add Week for that subject this week — it does not lock it.</p>
+    <div id="subjectsEntered"></div>
+  </div>
+  <div id="tDayCards"></div>
+  <p><button class="green" data-action="add-week">Add Week</button> <span class="note">Saves this subject's week and checks it off above.</span></p>
+  <h2>Week at a glance</h2>
+  <div id="weekGlance" class="card"></div>
+  <h2>Standards</h2>
+  <div class="card">
+    <div class="row"><span id="tProgressText" style="font-weight:bold;"></span></div>
+    <div class="bar" style="margin-top:8px;"><div id="tProgressBar" style="width:0%"></div></div>
+    <div class="row" style="margin:10px 0;">
+      <button data-action="filter" data-filter="all">All</button>
+      <button data-action="filter" data-filter="todo" class="gray">To teach</button>
+      <button data-action="filter" data-filter="done" class="gray">Taught</button>
+    </div>
+    <div id="tStdList"></div>
+  </div>
+  <h2>Weekly summary — all subjects</h2>
+  <p class="note">The notes box below belongs to the subject above. The printable summary gathers every subject for this grade-week.</p>
+  <label>Weekly notes to parents (this subject)</label>
+  <textarea id="tNotes" placeholder="Notes for the week…"></textarea>
+  <div id="teacherPrint"><div id="tSummaryAgenda"></div></div>
+  <p style="margin-top:12px;"><button data-action="print-teacher">Print this summary</button> <button data-action="copy-teacher" class="gray">Copy summary</button> <span id="copyTeacherMsg" class="note"></span></p>
+</div>
+
+<div id="principalSec" style="display:none;">
+  <h2>Principal — lesson plan summary</h2>
+  <div class="card">
+    <div class="row">
+      <label>Grade <select id="pGradeSel"></select></label>
+      <label>Date <input type="date" id="pAnchor"></label>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button data-action="period" data-period="Day">Day</button>
+      <button data-action="period" data-period="Week" class="gray">Week</button>
+      <button data-action="period" data-period="Month" class="gray">Month</button>
+      <button data-action="period" data-period="Quarter" class="gray">Quarter</button>
+    </div>
+    <p class="note" style="margin-bottom:0;">Shows the plans entered and the standards taught in the chosen period. In the real build this pulls every grade together from the school sheet; this demo only has Grade 4 Math standards loaded.</p>
+  </div>
+  <div id="principalPrint"><div id="pSummary"></div></div>
+  <p style="margin-top:12px;"><button data-action="print-principal">Print this summary</button> <button data-action="copy-principal" class="gray">Copy summary</button> <span id="copyPrincipalMsg" class="note"></span></p>
+</div>
+
+<p style="margin-top:24px;"><button data-action="clear-demo" class="gray small">Clear demo data</button></p>
+
+<script>
+const STANDARDS = [
+["Number Sense","4.NS.1","Read and write whole numbers up to 1,000,000. Use words, models, standard form and expanded form to represent and show equivalent forms of whole numbers up to 1,000,000."],
+["Number Sense","4.NS.2","Compare two whole numbers up to 1,000,000 using >, =, and < symbols."],
+["Number Sense","4.NS.3","Express whole numbers as fractions and recognize fractions that are equivalent to whole numbers. Name and write mixed numbers using objects or pictures. Name and write mixed numbers as improper fractions using objects or pictures."],
+["Number Sense","4.NS.4","Explain why a fraction, a/b, is equivalent to a fraction, (n x a)/(n x b), by using visual fraction models, with attention to how the number and size of the parts differ even though the two fractions themselves are the same size. Use this principle to recognize and generate equivalent fractions. [In grade 4, limit denominators of fractions to 2, 3, 4, 5, 6, 8, 10, 25, 100.]"],
+["Number Sense","4.NS.5","Compare two fractions with different numerators and different denominators (e.g., by creating common denominators or numerators, or by comparing to a benchmark, such as 0, 1/2, and 1). Recognize comparisons are valid only when the two fractions refer to the same whole. Record the results of comparisons with symbols >, =, or <, and justify the conclusions (e.g., by using a visual fraction model)."],
+["Number Sense","4.NS.6","Write tenths and hundredths in decimal and fraction notations. Use words, models, standard form and expanded form to represent decimal numbers to hundredths. Know the fraction and decimal equivalents for halves and fourths (e.g., 1/2 = 0.5 = 0.50, 7/4 = 1 3/4 = 1.75)."],
+["Number Sense","4.NS.7","Compare two decimals to hundredths by reasoning about their size based on the same whole. Record the results of comparisons with the symbols >, =, or <, and justify the conclusions (e.g., by using a visual model)."],
+["Number Sense","4.NS.8","Find all factor pairs for a whole number in the range 1-100. Recognize that a whole number is a multiple of each of its factors. Determine whether a given whole number in the range 1-100 is a multiple of a given one-digit number."],
+["Number Sense","4.NS.9","Use place value understanding to round multi-digit whole numbers to any given place value."],
+["Computation","4.C.1","Add and subtract multi-digit whole numbers fluently using a standard algorithmic approach."],
+["Computation","4.C.2","Multiply a whole number of up to four digits by a one-digit whole number and multiply two two-digit numbers, using strategies based on place value and the properties of operations. Describe the strategy and explain the reasoning."],
+["Computation","4.C.3","Find whole-number quotients and remainders with up to four-digit dividends and one-digit divisors, using strategies based on place value, the properties of operations, and/or the relationship between multiplication and division. Describe the strategy and explain the reasoning."],
+["Computation","4.C.4","Multiply fluently within 100."],
+["Computation","4.C.5","Add and subtract fractions with common denominators. Decompose a fraction into a sum of fractions with common denominators. Understand addition and subtraction of fractions as combining and separating parts referring to the same whole."],
+["Computation","4.C.6","Add and subtract mixed numbers with common denominators (e.g. by replacing each mixed number with an equivalent fraction and/or by using properties of operations and the relationship between addition and subtraction)."],
+["Computation","4.C.7","Show how the order in which two numbers are multiplied (commutative property) and how numbers are grouped in multiplication (associative property) will not change the product. Use these properties to show that numbers can be multiplied in any order. Understand and use the distributive property."],
+["Algebraic Thinking","4.AT.1","Solve real-world problems involving addition and subtraction of multi-digit whole numbers (e.g., by using drawings and equations with a symbol for the unknown number to represent the problem)."],
+["Algebraic Thinking","4.AT.2","Recognize and apply the relationships between addition and multiplication, between subtraction and division, and the inverse relationship between multiplication and division to solve real-world and other mathematical problems."],
+["Algebraic Thinking","4.AT.3","Interpret a multiplication equation as a comparison (e.g., interpret 35 = 5 x 7 as a statement that 35 is 5 times as many as 7, and 7 times as many as 5). Represent verbal statements of multiplicative comparisons as multiplication equations."],
+["Algebraic Thinking","4.AT.4","Solve real-world problems with whole numbers involving multiplicative comparison (e.g., by using drawings and equations with a symbol for the unknown number to represent the problem), distinguishing multiplicative comparison from additive comparison. [In grade 4, division problems should not include a remainder.]"],
+["Algebraic Thinking","4.AT.5","Solve real-world problems involving addition and subtraction of fractions referring to the same whole and having common denominators (e.g., by using visual fraction models and equations to represent the problem)."],
+["Algebraic Thinking","4.AT.6","Describe a relationship between two variables and use to find a second number when a first number is given. Generate a number pattern that follows a given rule."],
+["Geometry","4.G.1","Identify, describe, and draw parallelograms, rhombuses, and trapezoids using appropriate tools (e.g., ruler, straightedge and technology)."],
+["Geometry","4.G.2","Recognize and draw lines of symmetry in two-dimensional figures. Identify figures that have lines of symmetry."],
+["Geometry","4.G.3","Recognize angles as geometric shapes that are formed wherever two rays share a common endpoint."],
+["Geometry","4.G.4","Identify, describe, and draw rays, angles (right, acute, obtuse), and perpendicular and parallel lines using appropriate tools (e.g., ruler, straightedge and technology). Identify these in two-dimensional figures."],
+["Geometry","4.G.5","Classify triangles and quadrilaterals based on the presence or absence of parallel or perpendicular lines, or the presence or absence of angles (right, acute, obtuse)."],
+["Measurement","4.M.1","Measure length to the nearest quarter-inch, eighth-inch, and millimeter."],
+["Measurement","4.M.2","Know relative sizes of measurement units within one system of units, including km, m, cm; kg, g; lb, oz; l, ml; hr, min, sec. Express measurements in a larger unit in terms of a smaller unit within a single system of measurement. Record measurement equivalents in a two-column table."],
+["Measurement","4.M.3","Use the four operations to solve real-world problems involving distances, intervals of time, volumes, masses of objects, and money. Include addition and subtraction problems involving simple fractions and problems that require expressing measurements given in a larger unit in terms of a smaller unit."],
+["Measurement","4.M.4","Apply the area and perimeter formulas for rectangles to solve real-world problems and other mathematical problems. Recognize area as additive and find the area of complex shapes composed of rectangles by decomposing them into non-overlapping rectangles and adding the areas of the non-overlapping parts; apply this technique to solve real-world problems and other mathematical problems."],
+["Measurement","4.M.5","Understand that an angle is measured with reference to a circle, with its center at the common endpoint of the rays, by considering the fraction of the circular arc between the points where the two rays intersect the circle. Understand an angle that turns through 1/360 of a circle is called a 'one-degree angle,' and can be used to measure other angles. Understand an angle that turns through n one-degree angles is said to have an angle measure of n degrees."],
+["Measurement","4.M.6","Measure angles in whole-number degrees using appropriate tools. Sketch angles of specified measure."],
+["Data Analysis","4.DA.1","Formulate questions that can be addressed with data. Use observations, surveys, and experiments to collect, represent, and interpret the data using tables (including frequency tables), line plots, and bar graphs."],
+["Data Analysis","4.DA.2","Make a line plot to display a data set of measurements in fractions of a unit (1/2, 1/4, 1/8). Solve problems involving addition and subtraction of fractions by using data displayed in line plots."],
+["Data Analysis","4.DA.3","Interpret data displayed in a circle graph."]
+];
+const ELA_STANDARDS = [
+["Reading: Foundations","DOC.4.RF.1","Apply foundational reading skills to demonstrate reading fluency and comprehension."],
+["Reading: Foundations","DOC.4.RF.4.2","Use the six major syllable patterns (CVC, CVr, V, VV, VCe, Cle) to read unknown words."],
+["Reading: Foundations","DOC.4.RF.4.6","Use knowledge of all letter-sound correspondences, syllabication patterns, and morphology (e.g., roots and affixes) to read accurately unfamiliar multi-syllabic words in context."],
+["Reading: Foundations","DOC.4.RF.5","Orally read grade-level appropriate or higher texts smoothly and accurately, with expression that connotes comprehension at the independent level."],
+["Reading: Literature","DOC.4.RL.1","Read and comprehend a variety of literature within a range of complexity appropriate for grades 4-5. By the end of grade 4, students interact with texts proficiently and independently at the low end of the range and with scaffolding as needed at the high end."],
+["Reading: Literature","DOC.4.RL.2.1","Refer to details and examples in a text when explaining what a text says explicitly and when drawing inferences from the text."],
+["Reading: Literature","DOC.4.RL.2.2","Paraphrase or retell the main events in a story, myth, legend, or novel; identify the theme and provide evidence for the interpretation."],
+["Reading: Literature","DOC.4.RL.2.3","Describe a character, setting, or event in a story or play, drawing on specific details in the text, and how that impacts the plot."],
+["Reading: Literature","DOC.4.RL.3.1","Explain major differences between poems, plays, and prose, and refer to the structural elements of poems and drama."],
+["Reading: Literature","DOC.4.RL.3.2","Compare and contrast the point of view from which different stories are narrated, including the difference between first- and third-person narrations."],
+["Reading: Literature","DOC.4.RL.4.1","Describe how visual and multimedia presentations and representations can enhance the meaning of a text."],
+["Reading: Literature","DOC.4.RL.4.2","Compare and contrast the treatment of similar themes and topics and patterns of events in stories, myths, and traditional literature from different cultures."],
+["Reading: Nonfiction","DOC.4.RN.1","Read and comprehend a variety of nonfiction within a range of complexity appropriate for grades 4-5. By the end of grade 4, students interact with texts proficiently and independently at the low end of the range and with scaffolding as needed at the high end."],
+["Reading: Nonfiction","DOC.4.RN.2.1","Refer to details and examples in a text when explaining what a text says explicitly and when drawing inferences from the text."],
+["Reading: Nonfiction","DOC.4.RN.2.2","Determine the main idea of a text and explain how it is supported by key details; summarize the text."],
+["Reading: Nonfiction","DOC.4.RN.2.3","Explain the relationships between events, procedures, ideas, or concepts in a historical, scientific, or technical text, based on specific information in the text."],
+["Reading: Nonfiction","DOC.4.RN.3.1","Apply knowledge of text features to locate information and gain meaning from a text (e.g., charts, tables, graphs, headings, subheadings, font/format)."],
+["Reading: Nonfiction","DOC.4.RN.3.2","Describe the organizational structure (e.g., chronological, problem-solution, comparison/contrast, procedural, cause/effect, sequential, description) of events, ideas, concepts, or information in a text or part of a text."],
+["Reading: Nonfiction","DOC.4.RN.3.3","Compare and contrast a firsthand and secondhand account of the same event or topic; describe the differences in focus and the information provided in the accounts."],
+["Reading: Nonfiction","DOC.4.RN.4.1","Distinguish between fact and opinion; explain how an author uses reasons and evidence to support a statement or position (claim) in a text."],
+["Reading: Nonfiction","DOC.4.RN.4.2","Combine information from two texts on the same topic in order to demonstrate knowledge about the subject."],
+["Reading: Vocabulary","DOC.4.RV.1","Build and use accurately general academic and content-specific words and phrases."],
+["Reading: Vocabulary","DOC.4.RV.2.1","Apply context clues (e.g., word, phrase, sentence, and paragraph clues) and text features (e.g., charts, headings/subheadings, font/format) to determine the meanings of unknown words."],
+["Reading: Vocabulary","DOC.4.RV.2.2","Identify relationships among words, including more complex homographs, homonyms, synonyms, antonyms, and multiple meanings."],
+["Reading: Vocabulary","DOC.4.RV.2.4","Apply knowledge of word structure elements (e.g., suffixes, prefixes, common Greek and Latin affixes and roots), known words, and word patterns to determine meaning."],
+["Reading: Vocabulary","DOC.4.RV.2.5","Consult reference materials, both print and digital (e.g., dictionary), to find the pronunciation and clarify the precise meanings of words and phrases. Vocabulary in Literature and Nonfiction Texts"],
+["Reading: Vocabulary","DOC.4.RV.3.1","Determine how words and phrases provide meaning to works of literature, including figurative language (e.g., similes, metaphors, or hyperbole)."],
+["Reading: Vocabulary","DOC.4.RV.3.2","Determine the meanings of general academic and content-specific words and phrases in a nonfiction text relevant to a fourth grade topic or subject area."],
+["Reading: Vocabulary","DOC.4.RV.3.3","Explain the meanings of proverbs, adages, and idioms in context."],
+["Writing","DOC.4.W.1","Write routinely over a variety of time frames and for a range of discipline-specific tasks, purposes, and audiences; apply reading standards to support reflection and response to literature and nonfiction texts. Handwriting"],
+["Writing","DOC.4.W.2.1","Write legibly in print or cursive, forming letters and words that can be read by others."],
+["Writing","DOC.4.W.3.1","Write persuasive compositions in a variety of forms that \u2013 In an introductory statement, clearly state an opinion to a particular audience. Support the opinion with facts and details from various sources, including texts. Use an organizational structure to group related ideas that support the purpose. Connect opinion and reasons using words and phrases. Provide a concluding statement or section related to the position presented."],
+["Writing","DOC.4.W.3.2","Write informative compositions on a variety of topics that \u2013 Provide an introductory paragraph with a clear main idea. Provide supporting paragraphs with topic and summary sentences. Provide facts, specific details, and examples from various sources and texts to support ideas and extend explanations. Connect ideas using words and phrases. Include text features (e.g., formatting, pictures, graphics) and multimedia when useful to aid comprehension. Use language and vocabulary appropriate for audience and topic. Provide a concluding statement or section."],
+["Writing","DOC.4.W.3.3","Write narrative compositions in a variety of forms that \u2013 Establish an introduction, with a context to allow the reader to imagine the world of the event or experience. Organize events that unfold naturally, using meaningful paragraphing and transitional words and phrases. Use dialogue and descriptive details to develop events and reveal characters\u2019 personalities, feelings, and responses to situations. Employ vocabulary with sufficient sensory (sight, sound, smell, touch, taste) details to give clear pictures of ideas and events. Provide an ending that follows the narrated experiences or events. The Writing Process"],
+["Writing","DOC.4.W.4","Apply the writing process to \u2013 Generate a draft by developing, selecting and organizing ideas relevant to topic, purpose, and genre; revise to improve writing, using appropriate reference materials (e.g., quality of ideas, organization, sentence fluency, word choice); edit writing for format and conventions (e.g., spelling, capitalization, usage, punctuation). Use technology to interact and collaborate with others to publish legible documents."],
+["Writing","DOC.4.W.5","Conduct short research on a topic. Identify a specific question to address (e.g., What is the history of the Indy 500?). Use organizational features of print and digital sources to efficiently to locate further information. Determine the reliability of the sources. Summarize and organize information in their own words, giving credit to the source. Present the research information, choosing from a variety of formats."],
+["Writing","DOC.4.W.6.1","Demonstrate command of English grammar and usage, focusing on:"],
+["Writing","DOC.4.W.6.1a","Nouns/Pronouns \u2013 Writing sentences that include relative pronouns (e.g., who, which) and reflexive pronouns (e.g., myself, ourselves) and explaining their functions in the sentence."],
+["Writing","DOC.4.W.6.1b","Verbs \u2013 Writing sentences that use the progressive verb tenses. Recognizing and correcting inappropriate shifts in verb tense. Using modal auxiliaries (e.g., can, may, must)."],
+["Writing","DOC.4.W.6.1c","Adjectives/ Adverbs \u2013 Writing sentences using relative adverbs (e.g., where, when) and explaining their functions in the sentence."],
+["Writing","DOC.4.W.6.1d","Prepositions \u2013 Writing sentences that include prepositions, explaining their functions in the sentence."],
+["Writing","DOC.4.W.6.1e","Usage \u2013 Writing correctly complete simple, compound, and complex declarative, interrogative, imperative, and exclamatory sentences, using coordinating and subordinating conjunctions (e.g., yet, nor, so)."],
+["Writing","DOC.4.W.6.2","Demonstrate command of capitalization, punctuation, and spelling, focusing on:"],
+["Writing","DOC.4.W.6.2a","Capitalization \u2013 Capitalizing names of magazines, newspapers, works of art, musical compositions, organizations, and the first word in quotations, when appropriate."],
+["Writing","DOC.4.W.6.2b","Punctuation \u2013 Correctly using apostrophes to form possessives and contractions. Correctly using quotation marks and commas to mark direct speech. Using a comma before a coordinating conjunction in a compound sentence."],
+["Writing","DOC.4.W.6.2c","Spelling \u2013 Using spelling patterns and generalizations (e.g., word families, position-based spellings, syllable patterns, ending rules, meaningful word parts, homophones/ homographs) in writing single and multi-syllable words."],
+["Speaking and Listening","DOC.4.SL.1","Listen actively and adjust the use of spoken language (e.g., conventions, style, vocabulary) to communicate effectively with a variety of audiences and for different purposes."],
+["Speaking and Listening","DOC.4.SL.2.1","Engage effectively in a range of collaborative discussions (one-on-one, in groups, and teacher-led) on grade-appropriate topics and texts, building on others\u2019 ideas and expressing personal ideas clearly."],
+["Speaking and Listening","DOC.4.SL.2.2","Explore ideas under discussion by drawing on readings and other information."],
+["Speaking and Listening","DOC.4.SL.2.3","Demonstrate knowledge and use of agreed-upon rules for discussions and carry out assigned roles."],
+["Speaking and Listening","DOC.4.SL.2.4","Pose and respond to specific questions to clarify or follow up on information, and make comments that contribute to the discussion and link to the remarks of others."],
+["Speaking and Listening","DOC.4.SL.2.5","Review the key ideas expressed and explain personal ideas in reference to the discussion."],
+["Speaking and Listening","DOC.4.SL.3.1","Summarize major ideas and supportive evidence from text read aloud or information presented in diverse media and formats, including visually, quantitatively, and orally."],
+["Speaking and Listening","DOC.4.SL.3.2","Identify and use evidence a speaker provides to support particular points."],
+["Speaking and Listening","DOC.4.SL.4.1","Using appropriate language, report on a topic or text or provide a narrative in an organized manner, with effective introductions and conclusions, using appropriate structure, appropriate facts and relevant, descriptive details to support main ideas or themes; speak clearly and concisely at an understandable pace."],
+["Speaking and Listening","DOC.4.SL.4.2","Create oral presentations that maintain a clear focus, using multimedia to enhance the development of main ideas and themes that engage the audience."],
+["Media Literacy","DOC.4.ML.1","Identify how information found in electronic, print, and mass media is used to inform, persuade, entertain, and transmit culture."],
+["Media Literacy","DOC.4.ML.2.1","Recognize claims in print, image, and multimedia and identify evidence used to support these claims."],
+];
+const ELA_STRAND_ORDER = ["Reading: Foundations", "Reading: Literature", "Reading: Nonfiction", "Reading: Vocabulary", "Writing", "Speaking and Listening", "Media Literacy"];
+const STRAND_ORDER = ["Number Sense","Computation","Algebraic Thinking","Geometry","Measurement","Data Analysis"];
+const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri"];
+const LS_KEY = "lp-demo-v3";
+const GAS = new URLSearchParams(location.search).get("gas") || "";
+const CONNECTED = !!GAS;
+function gasGet(cb) {
+  const s = document.createElement("script");
+  const fn = "lpCb" + Date.now();
+  window[fn] = d => { try { cb(d); } finally { delete window[fn]; s.remove(); } };
+  s.src = GAS + "?action=getState&callback=" + fn;
+  s.onerror = () => cb(null);
+  document.head.appendChild(s);
+}
+function gasPost(obj) {
+  if (!CONNECTED) return;
+  try {
+    const fd = new FormData();
+    fd.append("payload", JSON.stringify(obj));
+    fetch(GAS, { method: "POST", mode: "no-cors", body: fd }).catch(() => {});
+  } catch (e) {}
+}
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const pad = n => String(n).padStart(2, "0");
+const iso = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+const parseD = s => new Date(s + "T12:00:00");
+const fmtDate = s => parseD(s).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+const fmtDay = s => parseD(s).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+function mondayOf(d) { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return iso(x); }
+const DEFAULT_SUBJECTS = ["Math","ELA","Religion","Science","Social Studies"];
+function freshState() {
+  return {
+    grades: ["Grade 4"],
+    subjects: { "Grade 4": [...DEFAULT_SUBJECTS] },
+    days: { "Grade 4|Math": [1, 3, 5], "Grade 4|ELA": [1, 2, 3, 4, 5], "Grade 4|Religion": [1, 2, 3, 4, 5], "Grade 4|Science": [1, 2, 3, 4, 5], "Grade 4|Social Studies": [1, 2, 3, 4, 5] },
+    resources: { "Grade 4|Math": [], "Grade 4|ELA": [], "Grade 4|Religion": [], "Grade 4|Science": [], "Grade 4|Social Studies": [] },
+    plans: {}, notes: {}, taught: {}, entered: {}
+  };
+}
+function load() { try { return JSON.parse(localStorage.getItem(LS_KEY)) || null; } catch (e) { return null; } }
+let S = load() || freshState();
+let UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all" };
+function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} const el = document.getElementById("savedLine"); if (el) el.textContent = "Saved ✓ " + new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+const gk = (g, s) => g + "|" + s;
+const pk = (g, s, w) => g + "|" + s + "|" + w;
+function dayKey(i) { return DAY_NAMES[i - 1]; }
+function dayDate(weekOf, i) { const d = parseD(weekOf); d.setDate(d.getDate() + (i - 1)); return fmtDay(iso(d)); }
+function planDay(g, s, w, k) {
+  const key = pk(g, s, w);
+  if (!S.plans[key]) S.plans[key] = {};
+  if (!S.plans[key][k]) S.plans[key][k] = { classwork: "", homework: "", resourceId: "", pages: "" };
+  return S.plans[key][k];
+}
+function taughtCount() { return Object.keys(S.taught).length; }
+function standardsFor(g, s) {
+  if (g === "Grade 4" && s === "Math") return { list: STANDARDS, order: STRAND_ORDER };
+  if (g === "Grade 4" && s === "ELA") return { list: ELA_STANDARDS, order: ELA_STRAND_ORDER };
+  return null;
+}
+function findStd(code) { return STANDARDS.find(x => x[1] === code) || ELA_STANDARDS.find(x => x[1] === code) || null; }
+
+function gradeOptions(sel, extra) {
+  const opts = (extra ? '<option value="ALL">All grades</option>' : "") + S.grades.map(g => '<option value="' + esc(g) + '"' + (sel === g ? " selected" : "") + ">" + esc(g) + "</option>").join("");
+  return opts;
+}
+function renderSetup() {
+  if (!S.grades.includes(UI.sGrade)) UI.sGrade = S.grades[0] || "";
+  $("#gradeChips").innerHTML = S.grades.map(g => '<span class="chip">' + esc(g) + ' <button data-action="del-grade" data-grade="' + esc(g) + '">×</button></span>').join("") || '<span class="note">No grades yet.</span>';
+  $("#sGradeSel").innerHTML = gradeOptions(UI.sGrade);
+  const g = UI.sGrade;
+  const subs = g ? (S.subjects[g] || []) : [];
+  $("#subjectCards").innerHTML = subs.length ? subs.map(s => {
+    const key = gk(g, s);
+    const days = S.days[key] || [1, 2, 3, 4, 5];
+    const res = S.resources[key] || [];
+    const dayChecks = DAY_NAMES.map((name, idx) => {
+      const i = idx + 1;
+      return '<label style="font-weight:normal;"><input type="checkbox" data-sday="' + i + '" data-subject="' + esc(s) + '" ' + (days.includes(i) ? "checked" : "") + "> " + name + "</label>";
+    }).join(" ");
+    const resChips = res.length ? res.map(r => '<span class="chip">' + esc(r.title) + " (" + esc(r.kind) + ') <button data-action="del-resource" data-subject="' + esc(s) + '" data-id="' + r.id + '">×</button></span>').join("") : '<span class="note">No resources yet.</span>';
+    return '<div class="card"><div class="row"><h3 style="margin:0;">' + esc(s) + '</h3><button class="small gray" data-action="del-subject" data-subject="' + esc(s) + '">Remove subject</button></div>' +
+      '<p style="margin:6px 0;"><label>Teaching days: </label>' + dayChecks + "</p>" +
+      '<p style="margin:6px 0;"><label>Resources: </label>' + resChips + "</p>" +
+      '<div class="row"><input type="text" data-restitle="' + esc(s) + '" placeholder="Book or workbook title" style="flex:1; min-width:180px;">' +
+      '<select data-reskind="' + esc(s) + '"><option>Book</option><option>Workbook</option><option>Other</option></select>' +
+      '<button data-action="add-resource" data-subject="' + esc(s) + '">Add resource</button></div></div>';
+  }).join("") : '<p class="note">No subjects for this grade yet. Add one below.</p>';
+}
+function renderTeacher() {
+  if (!S.grades.includes(UI.tGrade)) UI.tGrade = S.grades[0] || "";
+  const g = UI.tGrade, subs = g ? (S.subjects[g] || []) : [];
+  if (!subs.includes(UI.tSubject)) UI.tSubject = subs[0] || "";
+  const s = UI.tSubject;
+  $("#tGradeSel").innerHTML = gradeOptions(UI.tGrade);
+  $("#tSubjectSel").innerHTML = subs.map(x => '<option value="' + esc(x) + '"' + (x === s ? " selected" : "") + ">" + esc(x) + "</option>").join("");
+  $("#tWeek").value = UI.tWeek;
+  const days = (S.days[gk(g, s)] || []).slice().sort((a, b) => a - b);
+  const res = S.resources[gk(g, s)] || [];
+  $("#tDayCards").innerHTML = days.length ? days.map(i => {
+    const k = dayKey(i), d = planDay(g, s, UI.tWeek, k);
+    const opts = '<option value="">(no resource)</option>' + res.map(r => '<option value="' + r.id + '"' + (d.resourceId === r.id ? " selected" : "") + ">" + esc(r.title) + " (" + esc(r.kind) + ")</option>").join("");
+    return '<div class="card"><h3 style="margin-top:0;">' + dayDate(UI.tWeek, i) + '</h3>' +
+      '<label>Classwork</label><textarea data-day="' + k + '" data-field="classwork" placeholder="What the class will do…">' + esc(d.classwork) + "</textarea>" +
+      '<label>Homework</label><textarea data-day="' + k + '" data-field="homework" placeholder="What goes home…">' + esc(d.homework) + "</textarea>" +
+      '<div class="row" style="margin-top:8px;"><label>Resource <select data-day="' + k + '" data-field="resourceId">' + opts + "</select></label>" +
+      '<label>Pages / chapters <input type="text" data-day="' + k + '" data-field="pages" value="' + esc(d.pages) + '" placeholder="e.g. pp. 42–45 or Ch. 3" style="width:190px;"></label></div></div>';
+  }).join("") : '<p class="note">No teaching days set for this subject. Set them on the Setup tab.</p>';
+  const std = standardsFor(g, s);
+  const n = std ? std.list.filter(x => S.taught[x[1]]).length : 0;
+  $("#tProgressText").textContent = std ? n + " of " + std.list.length + " standards taught" : "Standards for this grade/subject are not loaded in this demo yet.";
+  $("#tProgressBar").style.width = std ? Math.round(n / std.list.length * 100) + "%" : "0%";
+  if (std) {
+    let html = "";
+    std.order.forEach(st => {
+      const rows = std.list.filter(x => x[0] === st).filter(x => {
+        const done = !!S.taught[x[1]];
+        return UI.filter === "all" || (UI.filter === "todo" && !done) || (UI.filter === "done" && done);
+      });
+      if (!rows.length) return;
+      const doneN = std.list.filter(x => x[0] === st && S.taught[x[1]]).length;
+      const totalN = std.list.filter(x => x[0] === st).length;
+      html += "<h3>" + st + " — " + doneN + " of " + totalN + " taught</h3>";
+      rows.forEach(x => {
+        const done = S.taught[x[1]];
+        html += '<div class="std' + (done ? " done" : "") + '"><label style="font-weight:normal;"><input type="checkbox" data-taught="' + x[1] + '" ' + (done ? "checked" : "") + "> <span class=\"code\">" + x[1] + "</span> — " + esc(x[2]) +
+          (done ? ' <span class="taught">✓ Taught ' + esc(fmtDate(done)) + "</span>" : ' <span class="note">Not yet taught</span>') + "</label></div>";
+      });
+    });
+    $("#tStdList").innerHTML = html || '<p class="note">Nothing in this view yet.</p>';
+  } else {
+    $("#tStdList").innerHTML = '<p class="note">Standards for ' + esc(g) + " " + esc(s) + " are not loaded in this demo yet — Grade 4 Math and ELA are loaded. The planning above works for any subject; its standards list gets added as it is extracted from the diocese documents.</p>";
+  }
+  renderTeacherSummary();
+  renderSubjectsEntered();
+  renderWeekGlance();
+}
+function renderSubjectsEntered() {
+  const g = UI.tGrade;
+  $("#enteredWeek").textContent = fmtDate(UI.tWeek);
+  const key = g + "|" + UI.tWeek;
+  const ent = S.entered[key] || {};
+  const subs = S.subjects[g] || [];
+  $("#subjectsEntered").innerHTML = subs.length ? subs.map(s =>
+    '<span class="chip" style="cursor:pointer;" data-action="goto-subject" data-subject="' + esc(s) + '">' + (ent[s] ? "✓ " : "○ ") + esc(s) + "</span>"
+  ).join("") : '<span class="note">No subjects for this grade yet.</span>';
+}
+function renderWeekGlance() {
+  const g = UI.tGrade;
+  const subs = S.subjects[g] || [];
+  if (!subs.length) { $("#weekGlance").innerHTML = '<p class="note">No subjects for this grade yet.</p>'; return; }
+  let html = '<table style="border-collapse:collapse;"><tr><th style="text-align:left; padding:4px 8px;">Day</th>' + subs.map(s => '<th style="padding:4px 8px;">' + esc(s) + "</th>").join("") + "</tr>";
+  DAY_NAMES.forEach((name, idx) => {
+    html += '<tr><td style="padding:4px 8px; font-weight:bold;">' + name + "</td>" + subs.map(s => {
+      const d = (S.plans[pk(g, s, UI.tWeek)] || {})[name] || {};
+      const has = !!(d.classwork || d.homework);
+      return '<td style="text-align:center; padding:4px 8px;"><span style="cursor:pointer;" data-action="goto-subject" data-subject="' + esc(s) + '">' + (has ? "✓" : "—") + "</span></td>";
+    }).join("") + "</tr>";
+  });
+  html += "</table><p class=\"note\">Click a subject name or a check to open that subject for editing.</p>";
+  $("#weekGlance").innerHTML = html;
+}
+function renderTeacherSummary() {
+  const g = UI.tGrade;
+  const subs = S.subjects[g] || [];
+  let html = "<h2>Weekly summary — " + esc(g) + " — week of " + esc(fmtDate(UI.tWeek)) + "</h2>";
+  subs.forEach(s => {
+    const days = (S.days[gk(g, s)] || []).slice().sort((a, b) => a - b);
+    const res = S.resources[gk(g, s)] || [];
+    html += "<h3>" + esc(s) + "</h3>";
+    html += days.length ? days.map(i => {
+      const d = planDay(g, s, UI.tWeek, dayKey(i));
+      const r = d.resourceId ? (res.find(x => x.id === d.resourceId) || {}) : {};
+      const ref = r.title ? " (" + esc(r.title) + (d.pages ? ", " + esc(d.pages) : "") + ")" : (d.pages ? " (" + esc(d.pages) + ")" : "");
+      return "<p><strong>" + dayDate(UI.tWeek, i) + ref + "</strong><br>Classwork: " + (d.classwork ? esc(d.classwork) : "<em>nothing written</em>") + "<br>Homework: " + (d.homework ? esc(d.homework) : "<em>nothing written</em>") + "</p>";
+    }).join("") : "<p><em>No teaching days set.</em></p>";
+    const nt = S.notes[pk(g, s, UI.tWeek)];
+    if (nt) html += "<p><strong>Notes:</strong> " + esc(nt) + "</p>";
+  });
+  $("#tSummaryAgenda").innerHTML = html;
+  const notes = $("#tNotes");
+  const key = pk(g, UI.tSubject, UI.tWeek);
+  if (notes && document.activeElement !== notes) notes.value = S.notes[key] || "";
+}
+function copyArea(areaSel, msgSel) {
+  const el = $(areaSel);
+  const text = [...el.querySelectorAll("h2,h3,p")].map(n => n.textContent).join("\n\n");
+  const done = () => { const m = $(msgSel); if (m) m.textContent = "Copied ✓"; };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done) {
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta);
+  } catch (e) {}
+  done();
+}
+
+function periodRange(period, anchor) {
+  const d = parseD(anchor);
+  if (period === "Day") return [iso(d), iso(d)];
+  if (period === "Week") {
+    const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 6) % 7));
+    const e = new Date(m); e.setDate(e.getDate() + 6);
+    return [iso(m), iso(e)];
+  }
+  if (period === "Month") {
+    const a = new Date(d.getFullYear(), d.getMonth(), 1);
+    const b = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return [iso(a), iso(b)];
+  }
+  const q = Math.floor(d.getMonth() / 3);
+  const a = new Date(d.getFullYear(), q * 3, 1);
+  const b = new Date(d.getFullYear(), q * 3 + 3, 0);
+  return [iso(a), iso(b)];
+}
+function renderPrincipal() {
+  $("#pGradeSel").innerHTML = gradeOptions(UI.pGrade, true);
+  $("#pAnchor").value = UI.pAnchor;
+  $$('[data-action="period"]').forEach(x => x.className = x.dataset.period === UI.period ? "" : "gray");
+  const range = periodRange(UI.period, UI.pAnchor);
+  const inR = d => d >= range[0] && d <= range[1];
+  const grades = UI.pGrade === "ALL" ? S.grades : [UI.pGrade];
+  let html = "<h2>Summary — " + UI.period + " of " + esc(fmtDate(range[0])) + (range[0] === range[1] ? "" : " to " + esc(fmtDate(range[1]))) + "</h2>";
+  let any = false;
+  grades.forEach(g => {
+    const subs = S.subjects[g] || [];
+    let gHtml = "";
+    subs.forEach(s => {
+      const rows = [];
+      Object.keys(S.plans).forEach(key => {
+        const parts = key.split("|");
+        if (parts[0] !== g || parts[1] !== s) return;
+        const w = parts[2];
+        Object.keys(S.plans[key]).forEach(k => {
+          const d = S.plans[key][k];
+          if (!d.classwork && !d.homework) return;
+          const idx = DAY_NAMES.indexOf(k);
+          const dt = parseD(w); dt.setDate(dt.getDate() + idx);
+          if (!inR(iso(dt))) return;
+          const r = d.resourceId ? ((S.resources[gk(g, s)] || []).find(x => x.id === d.resourceId) || {}) : {};
+          rows.push({ date: iso(dt), day: k, cw: d.classwork, hw: d.homework, res: r.title || "", pages: d.pages });
+        });
+      });
+      if (rows.length) {
+        any = true;
+        rows.sort((a, b) => a.date < b.date ? -1 : 1);
+        gHtml += "<h3>" + esc(s) + "</h3>" + rows.map(r =>
+          "<p><strong>" + esc(fmtDate(r.date)) + " (" + r.day + ")</strong>" + (r.res ? " — " + esc(r.res) + (r.pages ? ", " + esc(r.pages) : "") : "") +
+          "<br>Classwork: " + (r.cw ? esc(r.cw) : "<em>—</em>") + "<br>Homework: " + (r.hw ? esc(r.hw) : "<em>—</em>") + "</p>").join("");
+      }
+    });
+    if (gHtml) html += "<h3>" + esc(g) + "</h3>" + gHtml;
+  });
+  const taughtRows = Object.keys(S.taught).filter(c => inR(S.taught[c])).sort((a, b) => S.taught[a] < S.taught[b] ? -1 : 1);
+  if (taughtRows.length) {
+    any = true;
+    html += "<h3>Standards taught in this period</h3>" + taughtRows.map(c => {
+      const st = findStd(c);
+      return "<p><strong>" + c + "</strong> — " + esc(fmtDate(S.taught[c])) + (st ? " — " + esc(st[2].slice(0, 80)) + (st[2].length > 80 ? "…" : "") : "") + "</p>";
+    }).join("");
+  }
+  if (UI.pGrade === "ALL" || UI.pGrade === "Grade 4") {
+    const mN = STANDARDS.filter(x => S.taught[x[1]]).length;
+    const eN = ELA_STANDARDS.filter(x => S.taught[x[1]]).length;
+    html += "<p><strong>Grade 4 overall:</strong> Math " + mN + " of " + STANDARDS.length + " taught; ELA " + eN + " of " + ELA_STANDARDS.length + " taught.</p>";
+  }
+  if (!any) html += "<p><em>Nothing planned or taught in this period yet.</em></p>";
+  $("#pSummary").innerHTML = html;
+}
+function renderAll() {
+  $$('[data-action="tab"]').forEach(x => x.className = "tab" + (x.dataset.view === UI.view ? " active" : ""));
+  $("#setupSec").style.display = UI.view === "setup" ? "" : "none";
+  $("#teacherSec").style.display = UI.view === "teacher" ? "" : "none";
+  $("#principalSec").style.display = UI.view === "principal" ? "" : "none";
+  renderSetup(); renderTeacher(); renderPrincipal();
+}
+function doPrint(id) {
+  $$("#teacherPrint, #principalPrint").forEach(e => e.classList.remove("printArea"));
+  $(id).classList.add("printArea");
+  window.print();
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-action]");
+  if (!b) return;
+  const act = b.dataset.action, g = UI.sGrade;
+  if (act === "tab") { UI.view = b.dataset.view; renderAll(); }
+  else if (act === "add-grade") {
+    const t = $("#newGrade").value.trim();
+    if (!t || S.grades.includes(t)) return;
+    S.grades.push(t);
+    S.subjects[t] = [...DEFAULT_SUBJECTS];
+    DEFAULT_SUBJECTS.forEach(s => { S.days[gk(t, s)] = s === "Math" ? [1, 3, 5] : [1, 2, 3, 4, 5]; S.resources[gk(t, s)] = []; });
+    UI.sGrade = t; $("#newGrade").value = "";
+    save();
+    gasPost({ action: "addGrade", grade: t });
+    renderSetup(); renderTeacher(); renderPrincipal();
+  }
+  else if (act === "del-grade") {
+    const name = b.dataset.grade;
+    if (!confirm("Remove " + name + " and all its subjects, resources, and plans?")) return;
+    S.grades = S.grades.filter(x => x !== name);
+    delete S.subjects[name];
+    Object.keys(S.days).forEach(k => { if (k.split("|")[0] === name) delete S.days[k]; });
+    Object.keys(S.resources).forEach(k => { if (k.split("|")[0] === name) delete S.resources[k]; });
+    Object.keys(S.plans).forEach(k => { if (k.split("|")[0] === name) delete S.plans[k]; });
+    Object.keys(S.notes).forEach(k => { if (k.split("|")[0] === name) delete S.notes[k]; });
+    save();
+    gasPost({ action: "delGrade", grade: name });
+    renderAll();
+  }
+  else if (act === "add-subject") {
+    const t = $("#newSubject").value.trim();
+    if (!t || !g || (S.subjects[g] || []).includes(t)) return;
+    S.subjects[g].push(t);
+    S.days[gk(g, t)] = [1, 2, 3, 4, 5];
+    S.resources[gk(g, t)] = [];
+    $("#newSubject").value = "";
+    save();
+    gasPost({ action: "addSubject", grade: g, subject: t, days: "1,2,3,4,5" });
+    renderSetup(); renderTeacher();
+  }
+  else if (act === "del-subject") {
+    const s = b.dataset.subject;
+    if (!confirm("Remove subject " + s + " and its resources and plans?")) return;
+    S.subjects[g] = (S.subjects[g] || []).filter(x => x !== s);
+    delete S.days[gk(g, s)];
+    delete S.resources[gk(g, s)];
+    Object.keys(S.plans).forEach(k => { const p = k.split("|"); if (p[0] === g && p[1] === s) delete S.plans[k]; });
+    Object.keys(S.notes).forEach(k => { const p = k.split("|"); if (p[0] === g && p[1] === s) delete S.notes[k]; });
+    save();
+    gasPost({ action: "delSubject", grade: g, subject: s });
+    renderSetup(); renderTeacher(); renderPrincipal();
+  }
+  else if (act === "add-resource") {
+    const s = b.dataset.subject;
+    const titleEl = document.querySelector('[data-restitle="' + s + '"]');
+    const kindEl = document.querySelector('[data-reskind="' + s + '"]');
+    const t = titleEl.value.trim();
+    if (!t) return;
+    (S.resources[gk(g, s)] = S.resources[gk(g, s)] || []).push({ id: CONNECTED ? t : "r" + Date.now().toString(36), title: t, kind: kindEl.value });
+    titleEl.value = "";
+    save();
+    gasPost({ action: "addResource", grade: g, subject: s, title: t, kind: kindEl.value });
+    renderSetup(); renderTeacher();
+  }
+  else if (act === "del-resource") {
+    const s = b.dataset.subject, id = b.dataset.id;
+    const rt = (S.resources[gk(g, s)] || []).find(r => r.id === id);
+    S.resources[gk(g, s)] = (S.resources[gk(g, s)] || []).filter(r => r.id !== id);
+    Object.keys(S.plans).forEach(k => {
+      const p = k.split("|");
+      if (p[0] === g && p[1] === s) Object.values(S.plans[k]).forEach(d => { if (d.resourceId === id) d.resourceId = ""; });
+    });
+    save();
+    if (rt) gasPost({ action: "delResource", grade: g, subject: s, title: rt.title });
+    renderSetup(); renderTeacher();
+  }
+  else if (act === "filter") {
+    UI.filter = b.dataset.filter;
+    $$('[data-action="filter"]').forEach(x => x.className = x.dataset.filter === UI.filter ? "" : "gray");
+    renderTeacher();
+  }
+  else if (act === "period") { UI.period = b.dataset.period; renderPrincipal(); }
+  else if (act === "print-teacher") doPrint("#teacherPrint");
+  else if (act === "print-principal") doPrint("#principalPrint");
+  else if (act === "copy-teacher") copyArea("#teacherPrint", "#copyTeacherMsg");
+  else if (act === "copy-principal") copyArea("#principalPrint", "#copyPrincipalMsg");
+  else if (act === "save-now") { save(); }
+  else if (act === "goto-subject") { UI.tSubject = b.dataset.subject; renderTeacher(); }
+  else if (act === "add-week") {
+    const key = UI.tGrade + "|" + UI.tWeek;
+    if (!S.entered[key]) S.entered[key] = {};
+    S.entered[key][UI.tSubject] = true;
+    save();
+    gasPost({ action: "setEntered", grade: UI.tGrade, week: UI.tWeek, subject: UI.tSubject });
+    renderTeacher();
+  }
+  else if (act === "clear-demo") {
+    if (!confirm("Clear all demo data (grades, subjects, resources, plans, taught standards)?")) return;
+    localStorage.removeItem(LS_KEY);
+    S = freshState();
+    UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all" };
+    save(); renderAll();
+  }
+});
+function dayFieldInput(t) {
+  if (!t.dataset.day || !t.dataset.field) return false;
+  const dd = planDay(UI.tGrade, UI.tSubject, UI.tWeek, t.dataset.day);
+  dd[t.dataset.field] = t.value;
+  save();
+  gasPost({ action: "savePlan", grade: UI.tGrade, subject: UI.tSubject, week: UI.tWeek, day: t.dataset.day, classwork: dd.classwork, homework: dd.homework, resource: dd.resourceId, pages: dd.pages });
+  renderWeekGlance();
+  renderTeacherSummary();
+  return true;
+}
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.id === "tNotes") {
+    S.notes[pk(UI.tGrade, UI.tSubject, UI.tWeek)] = t.value;
+    save();
+    gasPost({ action: "saveNotes", grade: UI.tGrade, subject: UI.tSubject, week: UI.tWeek, notes: t.value });
+    renderTeacherSummary();
+    return;
+  }
+  dayFieldInput(t);
+});
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.id === "sGradeSel") { UI.sGrade = t.value; renderSetup(); }
+  else if (t.id === "tGradeSel") { UI.tGrade = t.value; renderTeacher(); }
+  else if (t.id === "tSubjectSel") { UI.tSubject = t.value; renderTeacher(); }
+  else if (t.id === "tWeek") {
+    const hasContent = Object.values(S.plans[pk(UI.tGrade, UI.tSubject, UI.tWeek)] || {}).some(d => d.classwork || d.homework);
+    if (hasContent && !confirm("Switch weeks? The current week's day plans stay saved under that week — you will see a fresh week.")) { t.value = UI.tWeek; return; }
+    UI.tWeek = mondayOf(parseD(t.value));
+    renderTeacher();
+  }
+  else if (t.id === "pGradeSel") { UI.pGrade = t.value; renderPrincipal(); }
+  else if (t.id === "pAnchor") { UI.pAnchor = t.value; renderPrincipal(); }
+  else if (t.dataset.sday) {
+    const i = Number(t.dataset.sday), s = t.dataset.subject;
+    const key = gk(UI.sGrade, s);
+    const cur = S.days[key] || [];
+    S.days[key] = t.checked ? [...cur, i].sort((a, b) => a - b) : cur.filter(x => x !== i);
+    save();
+    gasPost({ action: "setDays", grade: UI.sGrade, subject: s, days: S.days[key].join(",") });
+    renderSetup(); renderTeacher();
+  }
+  else if (t.dataset.taught) {
+    const code = t.dataset.taught;
+    if (t.checked) {
+      S.taught[code] = iso(new Date());
+      gasPost({ action: "setTaught", grade: UI.tGrade, subject: UI.tSubject, code: code, date: S.taught[code] });
+    } else {
+      delete S.taught[code];
+      gasPost({ action: "clearTaught", code: code });
+    }
+    save(); renderTeacher(); renderPrincipal();
+  }
+  else dayFieldInput(t);
+});
+function applyUrlParams() {
+  const q = new URLSearchParams(location.search);
+  const v = q.get("view");
+  if (v === "setup" || v === "teacher" || v === "principal") UI.view = v;
+  const gr = q.get("grade");
+  if (gr && S.grades.includes(gr)) UI.tGrade = gr;
+}
+function start() {
+  const banner = document.getElementById("connBanner");
+  if (!CONNECTED) {
+    if (banner) banner.textContent = "Demo mode — not connected to a sheet. Plans stay in this browser. Open with ?gas=YOUR_SCRIPT_URL to connect.";
+    applyUrlParams();
+    renderAll();
+    return;
+  }
+  if (banner) banner.textContent = "Connecting to the Lesson Plans sheet…";
+  let done = false;
+  const finish = d => {
+    if (done) return; done = true;
+    if (d && d.state && d.state.grades && d.state.grades.length) {
+      S = d.state;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {}
+      if (banner) banner.textContent = "Connected to the Lesson Plans sheet ✓";
+    } else {
+      if (banner) banner.textContent = "Could not reach the sheet — showing the last saved copy from this browser.";
+    }
+    applyUrlParams();
+    renderAll();
+  };
+  gasGet(finish);
+  setTimeout(() => finish(null), 10000);
+}
+start();
+</script>
+</body>
+</html>
