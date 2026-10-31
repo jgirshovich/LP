@@ -42,7 +42,7 @@
 <body>
 <h1>Lesson Plans</h1>
 <div id="connBanner" class="note" style="margin-bottom:8px;"></div>
-<p class="note"><strong>Demo — data lives in this browser only.</strong> The three tabs below are views, not accounts: Setup is the admin side (grades, subjects, resources), Teacher is data entry, Principal is the summary view. In the real build, teachers get personal links that open only their assigned grade(s), the server rejects writes to another teacher's plan, and the principal's view is a separate roster-checked, read-only link — the demo can't enforce that, so all tabs are visible here.</p>
+<p class="note" id="demoNote"><strong>Demo — data lives in this browser only.</strong> The three tabs below are views, not accounts: Setup is the admin side (grades, subjects, resources), Teacher is data entry, Principal is the summary view. In the real build, teachers get personal links that open only their assigned grade(s), the server rejects writes to another teacher's plan, and the principal's view is a separate roster-checked, read-only link — the demo can't enforce that, so all tabs are visible here.</p>
 
 <div class="row" style="margin-bottom:8px;">
   <button class="tab" data-action="tab" data-view="setup">Setup (admin)</button>
@@ -279,6 +279,7 @@ function freshState() {
 function load() { try { return JSON.parse(localStorage.getItem(LS_KEY)) || null; } catch (e) { return null; } }
 let S = load() || freshState();
 let UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all" };
+let LOCKED_VIEW = null; // v3.1: set from ?view= — when set, only that tab's button shows
 function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} const el = document.getElementById("savedLine"); if (el) el.textContent = "Saved ✓ " + new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
 const gk = (g, s) => g + "|" + s;
 const pk = (g, s, w) => g + "|" + s + "|" + w;
@@ -510,7 +511,14 @@ function renderPrincipal() {
   $("#pSummary").innerHTML = html;
 }
 function renderAll() {
-  $$('[data-action="tab"]').forEach(x => x.className = "tab" + (x.dataset.view === UI.view ? " active" : ""));
+  $$('[data-action="tab"]').forEach(x => {
+    x.className = "tab" + (x.dataset.view === UI.view ? " active" : "");
+    x.style.display = (!LOCKED_VIEW || x.dataset.view === LOCKED_VIEW) ? "" : "none";
+  });
+  const dn = document.getElementById("demoNote");
+  if (dn) dn.style.display = (LOCKED_VIEW || CONNECTED) ? "none" : "";
+  const cd = document.querySelector('[data-action="clear-demo"]');
+  if (cd && cd.closest("p")) cd.closest("p").style.display = LOCKED_VIEW ? "none" : "";
   $("#setupSec").style.display = UI.view === "setup" ? "" : "none";
   $("#teacherSec").style.display = UI.view === "teacher" ? "" : "none";
   $("#principalSec").style.display = UI.view === "principal" ? "" : "none";
@@ -525,7 +533,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-action]");
   if (!b) return;
   const act = b.dataset.action, g = UI.sGrade;
-  if (act === "tab") { UI.view = b.dataset.view; renderAll(); }
+  if (act === "tab") { if (LOCKED_VIEW && b.dataset.view !== LOCKED_VIEW) return; UI.view = b.dataset.view; renderAll(); }
   else if (act === "add-grade") {
     const t = $("#newGrade").value.trim();
     if (!t || S.grades.includes(t)) return;
@@ -684,7 +692,7 @@ document.addEventListener("change", e => {
 function applyUrlParams() {
   const q = new URLSearchParams(location.search);
   const v = q.get("view");
-  if (v === "setup" || v === "teacher" || v === "principal") UI.view = v;
+  if (v === "setup" || v === "teacher" || v === "principal") { UI.view = v; LOCKED_VIEW = v; }
   const gr = q.get("grade");
   if (gr && S.grades.includes(gr)) UI.tGrade = gr;
 }
