@@ -73,6 +73,8 @@
     <div id="wzStep2" style="display:none;">
       <p><strong>Step 2 of 3 — subjects and teaching days.</strong> Uncheck a subject to leave it out; uncheck days to change when it is taught.</p>
       <div id="wzSubjects"></div>
+      <div class="row" style="margin-top:8px;"><input type="text" id="wzNewSubject" placeholder="New subject name" style="flex:1; min-width:180px;">
+      <button data-action="wz-add-subject">Add new subject</button></div>
       <div class="row" style="margin-top:8px;"><button data-action="wz-back-2" class="gray">← Back</button> <button data-action="wz-next-2">Next: review →</button></div>
     </div>
     <div id="wzStep3" style="display:none;">
@@ -125,6 +127,7 @@
       <label>Subject <select id="tSubjectSel"></select></label>
       <label>Week of (Monday) <input type="date" id="tWeek"></label>
       <button data-action="save-now">Save</button>
+      <button data-action="toggle-sub" class="gray">Substitute plans</button>
       <span id="savedLine" class="note"></span>
     </div>
     <p class="note" style="margin-bottom:0;">Write each day freehand. Pick the resource from this subject's inventory and add pages or chapters. The standards list below is your reference — check a standard for the week it is taught. The date lands inside that week, and teaching it again in a later week adds another date. When a subject's week is done, hit Add Week — it saves and checks that subject off in Subjects Entered.</p>
@@ -135,7 +138,13 @@
     <div id="tResList"></div>
     <div class="row"><input type="text" id="newTeacherResource" placeholder="Book or workbook title" style="flex:1; min-width:180px;">
     <select id="newTeacherResourceKind"><option>Book</option><option>Workbook</option><option>Other</option></select>
-    <button data-action="add-teacher-resource">Add resource</button> <span id="teacherResourceMsg" class="note"></span></div>
+    <button data-action="add-teacher-resource">Add resource</button> <button data-action="toggle-res-mgr" class="gray">Resource manager</button> <span id="teacherResourceMsg" class="note"></span></div>
+  </div>
+  <div class="card" id="resMgr" style="display:none;">
+    <h3 style="margin-top:0;">Resource manager — all subjects for <span id="resMgrGrade"></span></h3>
+    <p class="note">Every subject's books, workbooks, and worksheets in one place. Add here and the resource appears in that subject's dropdowns. Removing a resource stays on the Setup tab.</p>
+    <div id="resMgrList"></div>
+    <span id="resMgrMsg" class="note"></span>
   </div>
   <div class="card section-entered">
     <h3 style="margin-top:0;">Subjects Entered — week of <span id="enteredWeek"></span></h3>
@@ -171,6 +180,25 @@
     <div id="emailPreview" contenteditable="true" style="border:1px solid #ccc; border-radius:6px; padding:10px; margin:12px 0; background:#fff;"></div>
     <div class="row"><button data-action="copy-email-html">Copy email (formatted)</button> <button data-action="copy-email-text" class="gray">Copy email (plain text)</button> <button data-action="regen-email" class="gray">Regenerate draft</button> <span id="copyEmailMsg" class="note"></span></div>
   </div>
+  <div id="subSec" style="display:none;">
+    <h2>Substitute plans</h2>
+    <div class="card">
+      <div class="row"><label>Week of (Monday) <input type="date" id="subWeek"></label>
+      <button data-action="sub-preview">Preview substitute plan</button>
+      <button data-action="sub-save" class="gray">Save notes &amp; schedule</button>
+      <button data-action="sub-print" class="gray">Print substitute plan</button> <span id="subMsg" class="note"></span></div>
+      <p class="note">Pick the days you need a substitute. Lessons already written for those days fill in automatically — days with nothing written are flagged when you preview.</p>
+      <div id="subDays" class="row"></div>
+      <p><label>Instructions for the substitute</label><textarea id="subNotes" placeholder="Anything the substitute needs to know for these days…"></textarea></p>
+      <p><label>Students &amp; special notes</label><textarea id="subSpecial" placeholder="Early dismissals, allergies, helpers, behavior notes…"></textarea></p>
+      <h3>Day schedule</h3>
+      <p class="note">Times for recess, lunch, specials, dismissal, and anything else the substitute needs. Saved for this grade, so you only fill it in once — add a row for class times if you want them listed.</p>
+      <div id="subSched"></div>
+      <div class="row" style="margin-top:8px;"><button data-action="sub-add-row" class="gray">Add schedule row</button></div>
+      <div id="subWarn"></div>
+    </div>
+  </div>
+  <div id="subPrint"><div id="subDoc"></div></div>
   </div>
 </div>
 
@@ -245,7 +273,8 @@ function freshState() {
     subjects: { "Grade 4": [...DEFAULT_SUBJECTS] },
     days: { "Grade 4|Math": [1, 3, 5], "Grade 4|ELA": [1, 2, 3, 4, 5], "Grade 4|Religion": [1, 2, 3, 4, 5], "Grade 4|Science": [1, 2, 3, 4, 5], "Grade 4|Social Studies": [1, 2, 3, 4, 5] },
     resources: { "Grade 4|Math": [], "Grade 4|ELA": [], "Grade 4|Religion": [], "Grade 4|Science": [], "Grade 4|Social Studies": [] },
-    plans: {}, notes: {}, taught: {}, entered: {}, standards: {}, teacherNames: {}
+    plans: {}, notes: {}, taught: {}, entered: {}, standards: {}, teacherNames: {},
+    subSchedule: {}, subNotes: {}
   };
 }
 function load() { try { return JSON.parse(localStorage.getItem(LS_KEY)) || null; } catch (e) { return null; } }
@@ -258,9 +287,11 @@ function normalizeTaught() {
   });
   if (!S.standards) S.standards = {};
   if (!S.teacherNames) S.teacherNames = {};
+  if (!S.subSchedule) S.subSchedule = {};
+  if (!S.subNotes) S.subNotes = {};
 }
 normalizeTaught();
-let UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all", dGrade: "Grade 4", dWeek: mondayOf(new Date()) };
+let UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all", dGrade: "Grade 4", dWeek: mondayOf(new Date()), subWeek: mondayOf(new Date()), subDays: [] };
 let LOCKED_VIEW = null; // v3.1: set from ?view= — when set, only that tab's button shows
 function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) {} const el = document.getElementById("savedLine"); if (el) el.textContent = (CONN_STATE === "connected" ? "Saved ✓ " : "Saved in this browser only ⚠ ") + new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
 const gk = (g, s) => g + "|" + s;
@@ -317,6 +348,16 @@ function parseStandardsPaste(text) {
     let parts = l.split("\t");
     let sep = " ";
     if (parts.length < 3) { parts = l.split(/\s*\|\s*/); sep = " | "; }
+    if (parts.length < 3) {
+      // Commas: split on the FIRST TWO commas only, so commas inside
+      // the standard text survive. The code must have no spaces
+      // (e.g. 4.NS.1), which keeps a plain sentence from parsing.
+      const c1 = l.indexOf(","), c2 = c1 === -1 ? -1 : l.indexOf(",", c1 + 1);
+      if (c1 !== -1 && c2 !== -1) {
+        const codeTry = l.slice(c1 + 1, c2).trim();
+        if (codeTry && codeTry.indexOf(" ") === -1) parts = [l.slice(0, c1).trim(), codeTry, l.slice(c2 + 1).trim()];
+      }
+    }
     let strand, code, standard;
     if (parts.length >= 5) {
       strand = parts[parts.length - 3].trim();
@@ -414,7 +455,7 @@ function renderSetup() {
       '<div class="row"><input type="text" data-restitle="' + esc(s) + '" placeholder="Book or workbook title" style="flex:1; min-width:180px;">' +
       '<select data-reskind="' + esc(s) + '"><option>Book</option><option>Workbook</option><option>Other</option></select>' +
       '<button data-action="add-resource" data-subject="' + esc(s) + '">Add resource</button></div>' +
-      '<p style="margin:12px 0 4px;"><label>Standards — paste, one per line: Strand, Code, Standard (tab- or pipe-separated; rows copied from the sheet\'s Standards tab work too)</label></p>' +
+      '<p style="margin:12px 0 4px;"><label>Standards — paste, one per line, in this order: Strand, Code, Standard. Separate the three parts with tabs, | pipes, or commas. Example: Number Sense | 4.NS.1 | Read and write whole numbers to 1,000,000. Rows copied from the sheet\'s Standards tab work as-is.</label></p>' +
       stdHtml +
       '<div class="row"><textarea placeholder="One standard per line" style="flex:1; min-width:180px;"></textarea>' +
       '<button data-action="add-standards" data-subject="' + esc(s) + '">Add standards</button></div></div>';
@@ -441,7 +482,7 @@ function renderTeacher() {
   const res = S.resources[gk(g, s)] || [];
   $("#tDayCards").innerHTML = days.length ? days.map(i => {
     const k = dayKey(i), d = planDay(g, s, UI.tWeek, k);
-    const opts = '<option value="">(no resource)</option>' + res.map(r => '<option value="' + r.id + '"' + (d.resourceId === r.id ? " selected" : "") + ">" + esc(r.title) + " (" + esc(r.kind) + ")</option>").join("");
+    const opts = '<option value="">(no resource)</option>' + res.map(r => '<option value="' + r.id + '"' + (d.resourceId === r.id ? " selected" : "") + ">" + esc(r.title) + " (" + esc(r.kind) + ")</option>").join("") + '<option value="__add__">+ Add a resource…</option>';
     return '<div class="card"><h3 style="margin-top:0;">' + dayDate(UI.tWeek, i) + '</h3>' +
       '<label>Classwork</label><textarea data-day="' + k + '" data-field="classwork" placeholder="What the class will do…">' + esc(d.classwork) + "</textarea>" +
       '<label>Homework</label><textarea data-day="' + k + '" data-field="homework" placeholder="What goes home…">' + esc(d.homework) + "</textarea>" +
@@ -480,6 +521,8 @@ function renderTeacher() {
   renderWeekGlance();
   renderEmailDraft(false);
   renderTeacherResources();
+  renderResourceManager();
+  renderSub();
 }
 function teacherLink(grade) {
   const base = location.origin + location.pathname;
@@ -536,6 +579,76 @@ function renderTeacherResources() {
   if (!list) return;
   const res = S.resources[gk(UI.tGrade, UI.tSubject)] || [];
   list.innerHTML = res.length ? res.map(r => '<span class="chip">' + esc(r.title) + " (" + esc(r.kind) + ")</span>").join("") : '<span class="note">No resources yet for this subject — add one below.</span>';
+}
+let RES_MGR_OPEN = false;
+function renderResourceManager() {
+  const panel = $("#resMgr");
+  if (!panel) return;
+  const g = UI.tGrade;
+  const gl = $("#resMgrGrade"); if (gl) gl.textContent = g;
+  panel.style.display = RES_MGR_OPEN ? "" : "none";
+  if (!RES_MGR_OPEN) return;
+  const subs = S.subjects[g] || [];
+  $("#resMgrList").innerHTML = subs.length ? subs.map(s => {
+    const res = S.resources[gk(g, s)] || [];
+    const chips = res.length ? res.map(r => '<span class="chip">' + esc(r.title) + " (" + esc(r.kind) + ")</span>").join("") : '<span class="note">No resources yet.</span>';
+    return '<div style="margin:10px 0;"><h4 style="margin:0 0 4px;">' + esc(s) + '</h4><div>' + chips + '</div>' +
+      '<div class="row" style="margin-top:4px;"><input type="text" data-mgrtitle="' + esc(s) + '" placeholder="Book, workbook, or worksheet title" style="flex:1; min-width:180px;">' +
+      '<select data-mgrkind="' + esc(s) + '"><option>Book</option><option>Workbook</option><option>Other</option></select>' +
+      '<button data-action="add-mgr-resource" data-subject="' + esc(s) + '">Add resource</button></div></div>';
+  }).join("") : '<p class="note">No subjects for this grade yet.</p>';
+}
+const DEFAULT_SUB_SCHED = [{ label: "Arrival", time: "", note: "" }, { label: "Recess", time: "", note: "" }, { label: "Lunch", time: "", note: "" }, { label: "Specials", time: "", note: "" }, { label: "Dismissal", time: "", note: "" }];
+function subSchedFor(g) {
+  if (!S.subSchedule) S.subSchedule = {};
+  if (!S.subSchedule[g]) S.subSchedule[g] = DEFAULT_SUB_SCHED.map(r => ({ label: r.label, time: r.time, note: r.note }));
+  return S.subSchedule[g];
+}
+function renderSub() {
+  const g = UI.tGrade;
+  const wk = $("#subWeek"); if (wk) wk.value = UI.subWeek;
+  const daysEl = $("#subDays");
+  if (daysEl) daysEl.innerHTML = DAY_NAMES.map((name, idx) =>
+    '<label style="font-weight:normal;"><input type="checkbox" data-subday="' + name + '" ' + (UI.subDays.includes(name) ? "checked" : "") + "> " + name + " (" + dayDate(UI.subWeek, idx + 1) + ")</label>").join(" ");
+  const key = g + "|" + UI.subWeek, sn = (S.subNotes || {})[key] || {};
+  const nEl = $("#subNotes"); if (nEl && document.activeElement !== nEl) nEl.value = sn.notes || "";
+  const sEl = $("#subSpecial"); if (sEl && document.activeElement !== sEl) sEl.value = sn.special || "";
+  const schedEl = $("#subSched");
+  const focusInSched = document.activeElement && document.activeElement.closest && document.activeElement.closest("#subSched");
+  if (schedEl && !focusInSched) {
+    schedEl.innerHTML = subSchedFor(g).map((r, i) =>
+      '<div class="row" style="margin-top:4px;"><input type="text" data-sublabel="' + i + '" value="' + esc(r.label) + '" placeholder="e.g. Lunch" style="width:150px;">' +
+      '<input type="text" data-subtime="' + i + '" value="' + esc(r.time) + '" placeholder="Time" style="width:110px;">' +
+      '<input type="text" data-subnote="' + i + '" value="' + esc(r.note) + '" placeholder="Note" style="flex:1; min-width:160px;">' +
+      '<button data-action="sub-del-row" data-idx="' + i + '" class="gray small">×</button></div>').join("");
+  }
+}
+function buildSubDoc() {
+  const g = UI.tGrade, week = UI.subWeek, days = UI.subDays;
+  const subs = S.subjects[g] || [];
+  let html = "<h2>Substitute plan — " + esc(g) + " — week of " + esc(fmtDate(week)) + "</h2>";
+  html += "<p><strong>Days covered:</strong> " + (days.length ? days.map(d => d + " (" + dayDate(week, DAY_NAMES.indexOf(d) + 1) + ")").join(", ") : "<em>none selected</em>") + "</p>";
+  const sched = subSchedFor(g).filter(r => r.label || r.time || r.note);
+  if (sched.length) {
+    html += "<h3>Day schedule</h3><table style='border-collapse:collapse;'>" + sched.map(r =>
+      "<tr><td style='padding:4px 8px; font-weight:bold;'>" + esc(r.label) + "</td><td style='padding:4px 8px;'>" + esc(r.time) + "</td><td style='padding:4px 8px;'>" + esc(r.note) + "</td></tr>").join("") + "</table>";
+  }
+  days.forEach(d => {
+    html += "<h3>" + d + " — " + dayDate(week, DAY_NAMES.indexOf(d) + 1) + "</h3>";
+    subs.forEach(s => {
+      const p = (S.plans[pk(g, s, week)] || {})[d] || {};
+      const res = (S.resources[gk(g, s)] || []).find(x => x.id === p.resourceId);
+      const ref = res ? " (" + esc(res.title) + (p.pages ? ", " + esc(p.pages) : "") + ")" : (p.pages ? " (" + esc(p.pages) + ")" : "");
+      if (p.classwork || p.homework) html += "<p><strong>" + esc(s) + ref + "</strong><br>Classwork: " + esc(p.classwork || "") + "<br>Homework: " + esc(p.homework || "") + "</p>";
+      else html += "<p><strong>" + esc(s) + "</strong> — <em>nothing written</em></p>";
+    });
+  });
+  const notes = $("#subNotes") ? $("#subNotes").value : ((S.subNotes || {})[g + "|" + week] || {}).notes || "";
+  const special = $("#subSpecial") ? $("#subSpecial").value : ((S.subNotes || {})[g + "|" + week] || {}).special || "";
+  if (notes) html += "<h3>Instructions for the substitute</h3><p>" + esc(notes).replace(/\n/g, "<br>") + "</p>";
+  if (special) html += "<h3>Students &amp; special notes</h3><p>" + esc(special).replace(/\n/g, "<br>") + "</p>";
+  html += "<h3>Notes from the substitute</h3>" + [1, 2, 3, 4, 5].map(() => '<div style="border-bottom:1px solid #999; height:28px;"></div>').join("");
+  return html;
 }
 function renderSubjectsEntered() {
   const g = UI.tGrade;
@@ -744,7 +857,7 @@ function renderAll() {
   renderSetup(); renderTeacher(); renderPrincipal();
 }
 function doPrint(id) {
-  $$("#teacherPrint, #principalPrint").forEach(e => e.classList.remove("printArea"));
+  $$("#teacherPrint, #principalPrint, #subPrint").forEach(e => e.classList.remove("printArea"));
   $(id).classList.add("printArea");
   window.print();
 }
@@ -796,6 +909,15 @@ document.addEventListener("click", e => {
     WZ.grade = grade; WZ.teacher = teacher; WZ.step = 2; renderWizard();
   }
   else if (act === "wz-back-2") { WZ.step = 1; renderWizard(); }
+  else if (act === "wz-add-subject") {
+    const t = $("#wzNewSubject").value.trim();
+    const msg = $("#wzMsg");
+    if (!t) { msg.textContent = "Type a subject name first."; return; }
+    if (WZ.subs.some(s => s.name.toLowerCase() === t.toLowerCase())) { msg.textContent = "That subject is already in the list."; return; }
+    WZ.subs.push({ name: t, include: true, days: [1, 2, 3, 4, 5] });
+    $("#wzNewSubject").value = "";
+    renderWizard();
+  }
   else if (act === "wz-next-2") {
     const msg = $("#wzMsg");
     WZ.subs.forEach((s, si) => {
@@ -826,8 +948,11 @@ document.addEventListener("click", e => {
     // with the wizard's choices so page and sheet agree.
     gasPost({ action: "addGrade", grade: grade });
     WZ.subs.forEach(s => {
-      if (!s.include) gasPost({ action: "delSubject", grade: grade, subject: s.name });
-      else {
+      if (!s.include) {
+        if (DEFAULT_SUBJECTS.includes(s.name)) gasPost({ action: "delSubject", grade: grade, subject: s.name });
+      } else if (!DEFAULT_SUBJECTS.includes(s.name)) {
+        gasPost({ action: "addSubject", grade: grade, subject: s.name, days: s.days.join(",") });
+      } else {
         const def = s.name === "Math" ? [1, 3, 5] : [1, 2, 3, 4, 5];
         if (JSON.stringify(s.days) !== JSON.stringify(def)) gasPost({ action: "setDays", grade: grade, subject: s.name, days: s.days.join(",") });
       }
@@ -901,6 +1026,91 @@ document.addEventListener("click", e => {
     renderTeacher();
     if (msg) msg.textContent = "Added ✓ — it now appears in the resource dropdown on every day card.";
   }
+  else if (act === "add-day-resource") {
+    const day = b.dataset.day;
+    const card = b.closest(".card");
+    const titleEl = card ? card.querySelector("[data-addrestitle]") : null;
+    const kindEl = card ? card.querySelector("[data-addreskind]") : null;
+    const t = titleEl ? titleEl.value.trim() : "";
+    if (!t) return;
+    const tg = UI.tGrade, ts = UI.tSubject, key = gk(tg, ts);
+    const existing = (S.resources[key] || []).find(r => r.title === t);
+    if (existing) {
+      // Already in the inventory: just select it for this day.
+      planDay(tg, ts, UI.tWeek, day).resourceId = existing.id;
+    } else {
+      const rec = { id: CONNECTED ? t : "r" + Date.now().toString(36), title: t, kind: kindEl.value };
+      (S.resources[key] = S.resources[key] || []).push(rec);
+      planDay(tg, ts, UI.tWeek, day).resourceId = rec.id;
+      gasPost({ action: "addResource", grade: tg, subject: ts, title: t, kind: kindEl.value });
+    }
+    save();
+    gasPost({ action: "savePlan", grade: tg, subject: ts, week: UI.tWeek, day: day,
+      classwork: planDay(tg, ts, UI.tWeek, day).classwork, homework: planDay(tg, ts, UI.tWeek, day).homework,
+      resource: planDay(tg, ts, UI.tWeek, day).resourceId, pages: planDay(tg, ts, UI.tWeek, day).pages });
+    renderTeacher();
+  }
+  else if (act === "cancel-day-resource") { renderTeacher(); }
+  else if (act === "toggle-res-mgr") { RES_MGR_OPEN = !RES_MGR_OPEN; renderResourceManager(); }
+  else if (act === "add-mgr-resource") {
+    const s = b.dataset.subject;
+    const titleEl = document.querySelector('[data-mgrtitle="' + s + '"]');
+    const kindEl = document.querySelector('[data-mgrkind="' + s + '"]');
+    const t = titleEl ? titleEl.value.trim() : "";
+    if (!t) return;
+    const key = gk(UI.tGrade, s);
+    if ((S.resources[key] || []).some(r => r.title === t)) {
+      const m = $("#resMgrMsg"); if (m) m.textContent = "That resource is already in " + s + "'s inventory.";
+      titleEl.value = "";
+      return;
+    }
+    (S.resources[key] = S.resources[key] || []).push({ id: CONNECTED ? t : "r" + Date.now().toString(36), title: t, kind: kindEl.value });
+    titleEl.value = "";
+    save();
+    gasPost({ action: "addResource", grade: UI.tGrade, subject: s, title: t, kind: kindEl.value });
+    renderTeacher();
+    const m = $("#resMgrMsg"); if (m) m.textContent = "Added ✓ — " + t + " is now in " + s + "'s dropdowns.";
+  }
+  else if (act === "toggle-sub") {
+    const el = $("#subSec");
+    const opening = el.style.display === "none";
+    el.style.display = opening ? "" : "none";
+    if (opening) renderSub();
+  }
+  else if (act === "sub-preview") {
+    const g = UI.tGrade, days = UI.subDays;
+    const msg = $("#subMsg");
+    if (!days.length) { msg.textContent = "Pick at least one day first."; return; }
+    const unplanned = days.filter(d =>
+      !(S.subjects[g] || []).some(s => { const p = (S.plans[pk(g, s, UI.subWeek)] || {})[d] || {}; return p.classwork || p.homework; }));
+    const warn = $("#subWarn");
+    warn.innerHTML = unplanned.length
+      ? '<div style="background:#f8d7da; color:#721c24; padding:8px 10px; border-radius:6px; margin-top:10px;"><strong>Nothing written yet for: ' + unplanned.join(", ") + '.</strong> Write those plans first, or uncheck those days — otherwise the substitute gets a blank day.</div>'
+      : "";
+    $("#subDoc").innerHTML = buildSubDoc();
+    msg.textContent = "Preview ready below — check it, then Print.";
+  }
+  else if (act === "sub-save") {
+    const g = UI.tGrade, key = g + "|" + UI.subWeek;
+    if (!S.subNotes) S.subNotes = {};
+    S.subNotes[key] = { notes: $("#subNotes").value, special: $("#subSpecial").value };
+    save();
+    gasPost({ action: "saveSubNotes", grade: g, week: UI.subWeek, notes: $("#subNotes").value, special: $("#subSpecial").value });
+    gasPost({ action: "saveSubSchedule", grade: g, rows: subSchedFor(g) });
+    const msg = $("#subMsg"); if (msg) msg.textContent = "Saved ✓ — notes and schedule are on the sheet.";
+  }
+  else if (act === "sub-print") {
+    if (!$("#subDoc").innerHTML.trim()) { const msg = $("#subMsg"); if (msg) msg.textContent = "Preview the plan first."; return; }
+    doPrint("#subPrint");
+  }
+  else if (act === "sub-add-row") {
+    subSchedFor(UI.tGrade).push({ label: "", time: "", note: "" });
+    save(); renderSub();
+  }
+  else if (act === "sub-del-row") {
+    subSchedFor(UI.tGrade).splice(parseInt(b.dataset.idx, 10), 1);
+    save(); renderSub();
+  }
   else if (act === "del-resource") {
     const s = b.dataset.subject, id = b.dataset.id;
     const rt = (S.resources[gk(g, s)] || []).find(r => r.id === id);
@@ -937,7 +1147,7 @@ document.addEventListener("click", e => {
     if (!confirm("Clear all demo data (grades, subjects, resources, plans, taught standards)?")) return;
     localStorage.removeItem(LS_KEY);
     S = freshState();
-    UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all", dGrade: "Grade 4", dWeek: mondayOf(new Date()) };
+    UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all", dGrade: "Grade 4", dWeek: mondayOf(new Date()), subWeek: mondayOf(new Date()), subDays: [] };
     save(); renderAll();
   }
   else if (act === "retry-conn") { location.reload(); }
@@ -1036,6 +1246,27 @@ document.addEventListener("click", e => {
 });
 function dayFieldInput(t) {
   if (!t.dataset.day || !t.dataset.field) return false;
+  if (t.dataset.field === "resourceId" && t.value === "__add__") {
+    // Show the inline add form on this day card instead of saving "__add__".
+    const card = t.closest(".card");
+    if (card && !card.querySelector(".dayAddRes")) {
+      const div = document.createElement("div");
+      div.className = "dayAddRes row";
+      div.style.marginTop = "8px";
+      div.innerHTML = '<input type="text" data-addrestitle placeholder="New resource title" style="flex:1; min-width:160px;">' +
+        '<select data-addreskind><option>Book</option><option>Workbook</option><option>Other</option></select>' +
+        '<button data-action="add-day-resource" data-day="' + t.dataset.day + '">Add</button>' +
+        '<button data-action="cancel-day-resource" data-day="' + t.dataset.day + '" class="gray">Cancel</button>';
+      card.appendChild(div);
+      const inp = div.querySelector("[data-addrestitle]"); if (inp) inp.focus();
+    }
+    return true;
+  }
+  // Picking a real resource discards any open add form on this card.
+  if (t.dataset.field === "resourceId") {
+    const card = t.closest(".card"), form = card ? card.querySelector(".dayAddRes") : null;
+    if (form) form.remove();
+  }
   const dd = planDay(UI.tGrade, UI.tSubject, UI.tWeek, t.dataset.day);
   dd[t.dataset.field] = t.value;
   save();
@@ -1047,6 +1278,25 @@ function dayFieldInput(t) {
 }
 document.addEventListener("input", e => {
   const t = e.target;
+  if (t.id === "subNotes" || t.id === "subSpecial") {
+    const key = UI.tGrade + "|" + UI.subWeek;
+    if (!S.subNotes) S.subNotes = {};
+    if (!S.subNotes[key]) S.subNotes[key] = { notes: "", special: "" };
+    if (t.id === "subNotes") S.subNotes[key].notes = t.value; else S.subNotes[key].special = t.value;
+    save();
+    return;
+  }
+  if (t.dataset.sublabel !== undefined || t.dataset.subtime !== undefined || t.dataset.subnote !== undefined) {
+    const rows = subSchedFor(UI.tGrade);
+    const i = parseInt(t.dataset.sublabel !== undefined ? t.dataset.sublabel : (t.dataset.subtime !== undefined ? t.dataset.subtime : t.dataset.subnote), 10);
+    if (rows[i]) {
+      if (t.dataset.sublabel !== undefined) rows[i].label = t.value;
+      if (t.dataset.subtime !== undefined) rows[i].time = t.value;
+      if (t.dataset.subnote !== undefined) rows[i].note = t.value;
+    }
+    save();
+    return;
+  }
   if (t.id === "tNotes") {
     S.notes[pk(UI.tGrade, UI.tSubject, UI.tWeek)] = t.value;
     save();
@@ -1072,6 +1322,12 @@ document.addEventListener("change", e => {
   else if (t.id === "pAnchor") { UI.pAnchor = t.value; renderPrincipal(); }
   else if (t.id === "dGradeSel") { UI.dGrade = t.value; renderDetail(); }
   else if (t.id === "dWeek") { UI.dWeek = mondayOf(parseD(t.value)); renderDetail(); }
+  else if (t.id === "subWeek") { UI.subWeek = mondayOf(parseD(t.value)); renderSub(); }
+  else if (t.dataset.subday) {
+    const d = t.dataset.subday;
+    UI.subDays = t.checked ? [...UI.subDays, d] : UI.subDays.filter(x => x !== d);
+    renderSub();
+  }
   else if (t.dataset.sday) {
     const i = Number(t.dataset.sday), s = t.dataset.subject;
     const key = gk(UI.sGrade, s);
