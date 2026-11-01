@@ -62,6 +62,34 @@
   <h2>Setup — grades, subjects, resources</h2>
   <p class="note">Add grade levels, then per grade add subjects. Each subject gets its own resource inventory (books and workbooks) and teaching days — the teacher picks from that subject's inventory when planning.</p>
   <div class="card">
+    <h3 style="margin-top:0;">Add a grade — step by step</h3>
+    <div id="wzStep1">
+      <p><strong>Step 1 of 3 — the grade and its teacher.</strong></p>
+      <div class="row"><label>Grade name <input type="text" id="wzGrade" placeholder="e.g. Grade 5" style="min-width:180px;"></label>
+      <label>Teacher name <input type="text" id="wzTeacher" placeholder="e.g. Mrs. Smith (optional)" style="min-width:180px;"></label></div>
+      <p class="note">The teacher's name is what greets them on their page. You can add or change it later, below.</p>
+      <button data-action="wz-next-1">Next: subjects &amp; days →</button>
+    </div>
+    <div id="wzStep2" style="display:none;">
+      <p><strong>Step 2 of 3 — subjects and teaching days.</strong> Uncheck a subject to leave it out; uncheck days to change when it is taught.</p>
+      <div id="wzSubjects"></div>
+      <div class="row" style="margin-top:8px;"><button data-action="wz-back-2" class="gray">← Back</button> <button data-action="wz-next-2">Next: review →</button></div>
+    </div>
+    <div id="wzStep3" style="display:none;">
+      <p><strong>Step 3 of 3 — review.</strong></p>
+      <div id="wzReview"></div>
+      <div class="row" style="margin-top:8px;"><button data-action="wz-back-3" class="gray">← Back</button> <button class="green" data-action="wz-create">Create grade &amp; teacher link</button></div>
+    </div>
+    <div id="wzDone" style="display:none;">
+      <p><strong>Done ✓ — <span id="wzDoneGrade"></span> is ready.</strong></p>
+      <p class="note" id="wzDoneNote">Send this link to the teacher. It opens their grade, locked to the Teacher tab.</p>
+      <div class="row"><input type="text" id="wzLink" readonly style="flex:1; min-width:280px;"> <button data-action="wz-copy-link">Copy link</button> <span id="wzDoneMsg" class="note"></span></div>
+      <p class="note">Next: paste that grade's standards into the subject cards below, or into the sheet's Standards tab.</p>
+      <button data-action="wz-again" class="gray">Add another grade</button>
+    </div>
+    <p id="wzMsg" class="note"></p>
+  </div>
+  <div class="card">
     <h3 style="margin-top:0;">Grade levels</h3>
     <div id="gradeChips"></div>
     <div class="row" style="margin-top:8px;">
@@ -72,6 +100,8 @@
   <p id="setupMsg" class="note"></p>
   <div class="card">
     <div class="row"><label>Editing grade: <select id="sGradeSel"></select></label></div>
+    <div class="row" style="margin-top:8px;"><label>Teacher for <span id="sTeacherGrade"></span>: <input type="text" id="sTeacherName" placeholder="Teacher name (optional)" style="min-width:180px;"></label>
+    <button data-action="save-teacher-name">Save teacher</button> <span id="sTeacherMsg" class="note"></span></div>
     <div id="subjectCards"></div>
     <div class="row" style="margin-top:12px;">
       <input type="text" id="newSubject" placeholder="New subject name" style="flex:1; min-width:180px;">
@@ -88,6 +118,7 @@
   <h2>Teacher — plan the week</h2>
   <div id="teacherGate"></div>
   <div id="teacherMain">
+  <div id="tGreeting" style="font-size:17px; margin-bottom:8px; display:none;"></div>
   <div class="card">
     <div class="row">
       <label>Grade <select id="tGradeSel"></select></label>
@@ -214,7 +245,7 @@ function freshState() {
     subjects: { "Grade 4": [...DEFAULT_SUBJECTS] },
     days: { "Grade 4|Math": [1, 3, 5], "Grade 4|ELA": [1, 2, 3, 4, 5], "Grade 4|Religion": [1, 2, 3, 4, 5], "Grade 4|Science": [1, 2, 3, 4, 5], "Grade 4|Social Studies": [1, 2, 3, 4, 5] },
     resources: { "Grade 4|Math": [], "Grade 4|ELA": [], "Grade 4|Religion": [], "Grade 4|Science": [], "Grade 4|Social Studies": [] },
-    plans: {}, notes: {}, taught: {}, entered: {}, standards: {}
+    plans: {}, notes: {}, taught: {}, entered: {}, standards: {}, teacherNames: {}
   };
 }
 function load() { try { return JSON.parse(localStorage.getItem(LS_KEY)) || null; } catch (e) { return null; } }
@@ -226,6 +257,7 @@ function normalizeTaught() {
     if (typeof S.taught[c] === "string") S.taught[c] = [S.taught[c]];
   });
   if (!S.standards) S.standards = {};
+  if (!S.teacherNames) S.teacherNames = {};
 }
 normalizeTaught();
 let UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all", dGrade: "Grade 4", dWeek: mondayOf(new Date()) };
@@ -362,6 +394,8 @@ function renderSetup() {
   $("#gradeChips").innerHTML = S.grades.map(g => '<span class="chip">' + esc(g) + ' <button data-action="del-grade" data-grade="' + esc(g) + '">×</button></span>').join("") || '<span class="note">No grades yet.</span>';
   $("#sGradeSel").innerHTML = gradeOptions(UI.sGrade);
   const g = UI.sGrade;
+  const tn = $("#sTeacherName"); if (tn) tn.value = (S.teacherNames || {})[g] || "";
+  const tg = $("#sTeacherGrade"); if (tg) tg.textContent = g || "";
   const subs = g ? (S.subjects[g] || []) : [];
   $("#subjectCards").innerHTML = subs.length ? subs.map(s => {
     const key = gk(g, s);
@@ -393,6 +427,12 @@ function renderTeacher() {
   const g = UI.tGrade, subs = g ? (S.subjects[g] || []) : [];
   if (!subs.includes(UI.tSubject)) UI.tSubject = subs[0] || "";
   const s = UI.tSubject;
+  const gr = $("#tGreeting");
+  if (gr) {
+    const nm = (S.teacherNames || {})[g];
+    gr.textContent = nm ? "Welcome, " + nm + "!" : "";
+    gr.style.display = nm ? "" : "none";
+  }
   $("#tGradeSel").innerHTML = gradeOptions(UI.tGrade);
   $("#tGradeSel").disabled = !!LOCKED_GRADE;
   $("#tSubjectSel").innerHTML = subs.map(x => '<option value="' + esc(x) + '"' + (x === s ? " selected" : "") + ">" + esc(x) + "</option>").join("");
@@ -440,6 +480,54 @@ function renderTeacher() {
   renderWeekGlance();
   renderEmailDraft(false);
   renderTeacherResources();
+}
+function teacherLink(grade) {
+  const base = location.origin + location.pathname;
+  const q = CONNECTED
+    ? "?gas=" + encodeURIComponent(GAS) + "&grade=" + encodeURIComponent(grade) + "&view=teacher"
+    : "?grade=" + encodeURIComponent(grade) + "&view=teacher";
+  return base + q;
+}
+// Setup wizard: step 1 grade + teacher, step 2 subjects + days,
+// step 3 review, then create and show the teacher link.
+let WZ = { step: 1, grade: "", teacher: "", subs: [] };
+function resetWizard() {
+  WZ = { step: 1, grade: "", teacher: "",
+    subs: DEFAULT_SUBJECTS.map(s => ({ name: s, include: true, days: s === "Math" ? [1, 3, 5] : [1, 2, 3, 4, 5] })) };
+  const g1 = $("#wzGrade"), t1 = $("#wzTeacher");
+  if (g1) g1.value = ""; if (t1) t1.value = "";
+  renderWizard();
+}
+function renderWizard() {
+  ["wzStep1", "wzStep2", "wzStep3", "wzDone"].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (WZ.step === i + 1) ? "" : "none";
+  });
+  const msg = $("#wzMsg"); if (msg && WZ.step !== 4) msg.textContent = "";
+  if (WZ.step === 2) {
+    $("#wzSubjects").innerHTML = WZ.subs.map((s, si) => {
+      const dayChecks = DAY_NAMES.map((name, idx) => {
+        const i = idx + 1;
+        return '<label style="font-weight:normal;"><input type="checkbox" data-wzday="' + i + '" data-wzsub="' + si + '" ' + (s.days.includes(i) ? "checked" : "") + "> " + name + "</label>";
+      }).join(" ");
+      return '<p style="margin:6px 0;"><label style="font-weight:normal;"><input type="checkbox" data-wzinc="' + si + '" ' + (s.include ? "checked" : "") + "> <strong>" + esc(s.name) + "</strong></label> " + dayChecks + "</p>";
+    }).join("");
+  }
+  if (WZ.step === 3) {
+    const kept = WZ.subs.filter(s => s.include);
+    $("#wzReview").innerHTML = "<p><strong>Grade:</strong> " + esc(WZ.grade) + "</p>" +
+      (WZ.teacher ? "<p><strong>Teacher:</strong> " + esc(WZ.teacher) + "</p>" : "<p><strong>Teacher:</strong> <em>none yet — add one below after creating.</em></p>") +
+      "<p><strong>Subjects:</strong></p><ul>" + kept.map(s => "<li>" + esc(s.name) + " — " + s.days.map(i => DAY_NAMES[i - 1]).join(", ") + "</li>").join("") + "</ul>";
+  }
+  if (WZ.step === 4) {
+    $("#wzDoneGrade").textContent = WZ.grade;
+    $("#wzLink").value = teacherLink(WZ.grade);
+    const dn = $("#wzDoneNote");
+    if (dn) dn.textContent = CONNECTED
+      ? "Send this link to " + (WZ.teacher ? WZ.teacher : "the teacher") + ". It opens their grade, locked to the Teacher tab."
+      : "Demo link — it opens this browser's demo copy of the grade, not the sheet. In the connected app the link carries the sheet connection.";
+    const dm = $("#wzDoneMsg"); if (dm) dm.textContent = "";
+  }
 }
 function renderTeacherResources() {
   const subj = $("#tResSubject");
@@ -681,6 +769,7 @@ document.addEventListener("click", e => {
     if (!confirm("Remove " + name + " and all its subjects, resources, and plans?")) return;
     S.grades = S.grades.filter(x => x !== name);
     delete S.subjects[name];
+    delete (S.teacherNames || {})[name];
     Object.keys(S.days).forEach(k => { if (k.split("|")[0] === name) delete S.days[k]; });
     Object.keys(S.resources).forEach(k => { if (k.split("|")[0] === name) delete S.resources[k]; });
     Object.keys(S.plans).forEach(k => { if (k.split("|")[0] === name) delete S.plans[k]; });
@@ -689,6 +778,69 @@ document.addEventListener("click", e => {
     gasPost({ action: "delGrade", grade: name });
     renderAll();
   }
+  else if (act === "save-teacher-name") {
+    const name = $("#sTeacherName").value.trim();
+    if (!g) return;
+    if (!S.teacherNames) S.teacherNames = {};
+    if (name) S.teacherNames[g] = name; else delete S.teacherNames[g];
+    save();
+    gasPost({ action: "setTeacherName", grade: g, name: name });
+    renderSetup(); renderTeacher();
+    const m = $("#sTeacherMsg"); if (m) m.textContent = name ? "Saved ✓ — " + name + " will be greeted on the " + g + " page." : "Saved ✓ — no teacher name for " + g + ".";
+  }
+  else if (act === "wz-next-1") {
+    const grade = $("#wzGrade").value.trim(), teacher = $("#wzTeacher").value.trim();
+    const msg = $("#wzMsg");
+    if (!grade) { msg.textContent = "Type a grade name first."; return; }
+    if (S.grades.includes(grade)) { msg.textContent = "That grade already exists — pick another name, or edit it in the grade cards below."; return; }
+    WZ.grade = grade; WZ.teacher = teacher; WZ.step = 2; renderWizard();
+  }
+  else if (act === "wz-back-2") { WZ.step = 1; renderWizard(); }
+  else if (act === "wz-next-2") {
+    const msg = $("#wzMsg");
+    WZ.subs.forEach((s, si) => {
+      const inc = document.querySelector('[data-wzinc="' + si + '"]');
+      s.include = inc ? inc.checked : true;
+      s.days = $$('[data-wzsub="' + si + '"][data-wzday]').filter(c => c.checked).map(c => parseInt(c.dataset.wzday, 10)).sort((a, b) => a - b);
+    });
+    const kept = WZ.subs.filter(s => s.include);
+    if (!kept.length) { msg.textContent = "Include at least one subject."; return; }
+    const noDays = kept.find(s => !s.days.length);
+    if (noDays) { msg.textContent = "Pick at least one teaching day for " + noDays.name + "."; return; }
+    WZ.step = 3; renderWizard();
+  }
+  else if (act === "wz-back-3") { WZ.step = 2; renderWizard(); }
+  else if (act === "wz-create") {
+    const grade = WZ.grade, teacher = WZ.teacher;
+    if (!grade || S.grades.includes(grade)) return;
+    S.grades.push(grade);
+    S.subjects[grade] = WZ.subs.filter(s => s.include).map(s => s.name);
+    WZ.subs.forEach(s => {
+      if (s.include) { S.days[gk(grade, s.name)] = [...s.days]; S.resources[gk(grade, s.name)] = []; }
+    });
+    if (!S.teacherNames) S.teacherNames = {};
+    if (teacher) S.teacherNames[grade] = teacher;
+    UI.sGrade = grade; UI.tGrade = grade;
+    save();
+    // The server's addGrade creates the 5 default subjects; reconcile it
+    // with the wizard's choices so page and sheet agree.
+    gasPost({ action: "addGrade", grade: grade });
+    WZ.subs.forEach(s => {
+      if (!s.include) gasPost({ action: "delSubject", grade: grade, subject: s.name });
+      else {
+        const def = s.name === "Math" ? [1, 3, 5] : [1, 2, 3, 4, 5];
+        if (JSON.stringify(s.days) !== JSON.stringify(def)) gasPost({ action: "setDays", grade: grade, subject: s.name, days: s.days.join(",") });
+      }
+    });
+    if (teacher) gasPost({ action: "setTeacherName", grade: grade, name: teacher });
+    renderSetup(); renderTeacher(); renderPrincipal();
+    WZ.step = 4; renderWizard();
+  }
+  else if (act === "wz-copy-link") {
+    const done = () => { const m = $("#wzDoneMsg"); if (m) m.textContent = "Copied ✓"; };
+    fallbackCopy($("#wzLink").value, done);
+  }
+  else if (act === "wz-again") { resetWizard(); }
   else if (act === "add-subject") {
     const t = $("#newSubject").value.trim();
     if (!t || !g || (S.subjects[g] || []).includes(t)) return;
@@ -1000,6 +1152,7 @@ function start() {
   gasGet(finish);
   setTimeout(() => finish(null), 10000);
 }
+resetWizard();
 start();
 </script>
 </body>
