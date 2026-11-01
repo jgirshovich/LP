@@ -186,8 +186,10 @@
       <div class="row"><label>Week of (Monday) <input type="date" id="subWeek"></label>
       <button data-action="sub-preview">Preview substitute plan</button>
       <button data-action="sub-save" class="gray">Save notes &amp; schedule</button>
-      <button data-action="sub-print" class="gray">Print substitute plan</button> <span id="subMsg" class="note"></span></div>
+      <button data-action="sub-print" class="gray">Print substitute plan</button> <button data-action="sub-close" class="gray">Close</button> <span id="subMsg" class="note"></span></div>
       <p class="note">Pick the days you need a substitute. Lessons already written for those days fill in automatically — days with nothing written are flagged when you preview.</p>
+      <div class="row"><label>Saved substitute plans <select id="subHistory"><option value="">— Pick a saved plan —</option></select></label>
+      <span id="subCount" class="note"></span></div>
       <div id="subDays" class="row"></div>
       <p><label>Instructions for the substitute</label><textarea id="subNotes" placeholder="Anything the substitute needs to know for these days…"></textarea></p>
       <p><label>Students &amp; special notes</label><textarea id="subSpecial" placeholder="Early dismissals, allergies, helpers, behavior notes…"></textarea></p>
@@ -289,6 +291,7 @@ function normalizeTaught() {
   if (!S.teacherNames) S.teacherNames = {};
   if (!S.subSchedule) S.subSchedule = {};
   if (!S.subNotes) S.subNotes = {};
+  Object.keys(S.subNotes).forEach(k => { if (!S.subNotes[k].days) S.subNotes[k].days = []; });
 }
 normalizeTaught();
 let UI = { view: "teacher", sGrade: "Grade 4", tGrade: "Grade 4", tSubject: "Math", tWeek: mondayOf(new Date()), pGrade: "ALL", period: "Week", pAnchor: iso(new Date()), filter: "all", dGrade: "Grade 4", dWeek: mondayOf(new Date()), subWeek: mondayOf(new Date()), subDays: [] };
@@ -613,6 +616,22 @@ function renderSub() {
   const key = g + "|" + UI.subWeek, sn = (S.subNotes || {})[key] || {};
   const nEl = $("#subNotes"); if (nEl && document.activeElement !== nEl) nEl.value = sn.notes || "";
   const sEl = $("#subSpecial"); if (sEl && document.activeElement !== sEl) sEl.value = sn.special || "";
+  const hist = $("#subHistory");
+  if (hist) {
+    const plans = Object.keys(S.subNotes || {}).filter(k => k.indexOf(g + "|") === 0).sort((a, b) => a.split("|")[1] < b.split("|")[1] ? -1 : 1);
+    let total = 0;
+    hist.innerHTML = '<option value="">— Pick a saved plan —</option>' + plans.map(k => {
+      const wk = k.split("|")[1], pl = S.subNotes[k];
+      total += (pl.days || []).length;
+      const label = "Week of " + fmtDate(wk) + ((pl.days || []).length ? " — " + pl.days.join(", ") : "");
+      return '<option value="' + wk + '">' + esc(label) + "</option>";
+    }).join("");
+    hist.value = plans.some(k => k === g + "|" + UI.subWeek) ? UI.subWeek : "";
+    const cnt = $("#subCount");
+    if (cnt) cnt.textContent = plans.length
+      ? "Substitute days on record for " + g + ": " + total + " day" + (total === 1 ? "" : "s") + " across " + plans.length + " saved plan" + (plans.length === 1 ? "" : "s") + "."
+      : "No substitute plans saved for " + g + " yet.";
+  }
   const schedEl = $("#subSched");
   const focusInSched = document.activeElement && document.activeElement.closest && document.activeElement.closest("#subSched");
   if (schedEl && !focusInSched) {
@@ -1098,11 +1117,19 @@ document.addEventListener("click", e => {
   else if (act === "sub-save") {
     const g = UI.tGrade, key = g + "|" + UI.subWeek;
     if (!S.subNotes) S.subNotes = {};
-    S.subNotes[key] = { notes: $("#subNotes").value, special: $("#subSpecial").value };
+    S.subNotes[key] = { notes: $("#subNotes").value, special: $("#subSpecial").value, days: UI.subDays.slice() };
     save();
-    gasPost({ action: "saveSubNotes", grade: g, week: UI.subWeek, notes: $("#subNotes").value, special: $("#subSpecial").value });
+    gasPost({ action: "saveSubNotes", grade: g, week: UI.subWeek, notes: $("#subNotes").value, special: $("#subSpecial").value, days: UI.subDays.slice() });
     gasPost({ action: "saveSubSchedule", grade: g, rows: subSchedFor(g) });
-    const msg = $("#subMsg"); if (msg) msg.textContent = "Saved ✓ — notes and schedule are on the sheet.";
+    // Confirm at the top, then take the teacher back up there.
+    const sl = $("#savedLine");
+    if (sl) sl.textContent = "Substitute plan for the week of " + fmtDate(UI.subWeek) + " saved ✓ — notes, schedule, and days are on the sheet.";
+    $("#subSec").style.display = "none";
+    if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
+  }
+  else if (act === "sub-close") {
+    $("#subSec").style.display = "none";
+    if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
   }
   else if (act === "sub-print") {
     if (!$("#subDoc").innerHTML.trim()) { const msg = $("#subMsg"); if (msg) msg.textContent = "Preview the plan first."; return; }
@@ -1286,7 +1313,7 @@ document.addEventListener("input", e => {
   if (t.id === "subNotes" || t.id === "subSpecial") {
     const key = UI.tGrade + "|" + UI.subWeek;
     if (!S.subNotes) S.subNotes = {};
-    if (!S.subNotes[key]) S.subNotes[key] = { notes: "", special: "" };
+    if (!S.subNotes[key]) S.subNotes[key] = { notes: "", special: "", days: [] };
     if (t.id === "subNotes") S.subNotes[key].notes = t.value; else S.subNotes[key].special = t.value;
     save();
     return;
@@ -1327,7 +1354,17 @@ document.addEventListener("change", e => {
   else if (t.id === "pAnchor") { UI.pAnchor = t.value; renderPrincipal(); }
   else if (t.id === "dGradeSel") { UI.dGrade = t.value; renderDetail(); }
   else if (t.id === "dWeek") { UI.dWeek = mondayOf(parseD(t.value)); renderDetail(); }
-  else if (t.id === "subWeek") { UI.subWeek = mondayOf(parseD(t.value)); renderSub(); }
+  else if (t.id === "subWeek") { UI.subWeek = mondayOf(parseD(t.value)); $("#subDoc").innerHTML = ""; $("#subWarn").innerHTML = ""; renderSub(); }
+  else if (t.id === "subHistory") {
+    if (!t.value) return;
+    UI.subWeek = t.value;
+    const pl = (S.subNotes || {})[UI.tGrade + "|" + t.value] || {};
+    UI.subDays = (pl.days || []).slice();
+    $("#subDoc").innerHTML = ""; $("#subWarn").innerHTML = "";
+    renderSub();
+    const el = $("#subSec");
+    if (el && el.scrollIntoView) el.scrollIntoView();
+  }
   else if (t.dataset.subday) {
     const d = t.dataset.subday;
     UI.subDays = t.checked ? [...UI.subDays, d] : UI.subDays.filter(x => x !== d);
