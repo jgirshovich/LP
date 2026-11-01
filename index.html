@@ -1075,7 +1075,12 @@ document.addEventListener("click", e => {
     const el = $("#subSec");
     const opening = el.style.display === "none";
     el.style.display = opening ? "" : "none";
-    if (opening) renderSub();
+    if (opening) {
+      renderSub();
+      // The panel sits below the email card, so bring it into view —
+      // otherwise the click looks like it did nothing.
+      if (el.scrollIntoView) el.scrollIntoView();
+    }
   }
   else if (act === "sub-preview") {
     const g = UI.tGrade, days = UI.subDays;
