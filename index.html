@@ -36,6 +36,7 @@
   .std .code { font-weight: bold; }
   .std .taught { color: #2e7d32; font-weight: bold; font-size: 13px; }
   .std.done { background: #e8f5e9; border-left: 4px solid #2e7d32; padding-left: 8px; }
+  .sampleTag { background: #fff3cd; color: #856404; border: 1px solid #e6c87a; border-radius: 4px; padding: 1px 5px; font-size: 11px; font-weight: bold; margin-left: 4px; }
   .bar { height: 18px; background: #e5e5e5; border-radius: 999px; overflow: hidden; }
   .bar > div { height: 100%; background: #2e7d32; }
   .sig { margin-top: 28px; display: flex; gap: 40px; }
@@ -131,6 +132,12 @@
       <span id="savedLine" class="note"></span>
     </div>
     <p class="note" style="margin-bottom:0;">Write each day freehand. Pick the resource from this subject's inventory and add pages or chapters. The standards list below is your reference — check a standard for the week it is taught. The date lands inside that week, and teaching it again in a later week adds another date. When a subject's week is done, hit Add Week — it saves and checks that subject off in Subjects Entered.</p>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0;">Teaching days — <span id="tDaysSubject"></span></h3>
+    <p class="note">Which days this subject is taught. The day cards below follow these days — uncheck a day and its card goes away, but anything you wrote for that day stays saved and comes back if you check the day again.</p>
+    <div id="tDaysChecks" class="row"></div>
+    <span id="tDaysMsg" class="note"></span>
   </div>
   <div class="card section-resources">
     <h3 style="margin-top:0;">Resources — <span id="tResSubject"></span></h3>
@@ -308,6 +315,40 @@ function planDay(g, s, w, k) {
   return S.plans[key][k];
 }
 function taughtCount() { return Object.keys(S.taught).length; }
+// v9: sample standards — plainly fake examples for subjects with no real
+// DOC standards loaded (Religion, Science, Social Studies). A sample row
+// is an ordinary Standards row whose code starts with "SAMPLE-" and whose
+// strand is "Sample", so every view labels it without any schema change.
+// Codes carry a subject prefix (REL/SCI/SS) because S.taught is keyed by
+// code alone — two subjects must never share a sample code.
+const SAMPLE_STANDARDS = {
+  "Religion": [
+    ["Sample", "SAMPLE-REL-1", "Sample: Retell a story with a beginning, middle, and end."],
+    ["Sample", "SAMPLE-REL-2", "Sample: Name one way to show kindness at school."],
+    ["Sample", "SAMPLE-REL-3", "Sample: Say the Sign of the Cross from memory."],
+    ["Sample", "SAMPLE-REL-4", "Sample: Tell why we pray before meals."],
+    ["Sample", "SAMPLE-REL-5", "Sample: Draw a picture of a Bible story."],
+    ["Sample", "SAMPLE-REL-6", "Sample: Share one thing to thank God for today."]
+  ],
+  "Science": [
+    ["Sample", "SAMPLE-SCI-1", "Sample: Sort objects by whether they sink or float."],
+    ["Sample", "SAMPLE-SCI-2", "Sample: Describe what a plant needs to grow."],
+    ["Sample", "SAMPLE-SCI-3", "Sample: Name the four seasons in order."],
+    ["Sample", "SAMPLE-SCI-4", "Sample: Observe and draw the moon over one week."],
+    ["Sample", "SAMPLE-SCI-5", "Sample: Tell whether an animal is a mammal, bird, or fish."],
+    ["Sample", "SAMPLE-SCI-6", "Sample: Measure how far a toy car rolls."]
+  ],
+  "Social Studies": [
+    ["Sample", "SAMPLE-SS-1", "Sample: Name the town, state, and country we live in."],
+    ["Sample", "SAMPLE-SS-2", "Sample: Tell one rule at school and why it matters."],
+    ["Sample", "SAMPLE-SS-3", "Sample: Draw a simple map of the classroom."],
+    ["Sample", "SAMPLE-SS-4", "Sample: Name a community helper and what they do."],
+    ["Sample", "SAMPLE-SS-5", "Sample: Tell how people long ago traveled."],
+    ["Sample", "SAMPLE-SS-6", "Sample: Share one family tradition."]
+  ]
+};
+function isSampleCode(code) { return String(code || "").indexOf("SAMPLE-") === 0; }
+function sampleTag() { return '<span class="sampleTag">SAMPLE</span>'; }
 function standardsFor(g, s) {
   const list = (S.standards && S.standards[gk(g, s)]) || [];
   if (!list.length) return null;
@@ -407,7 +448,7 @@ function buildEmailDraft() {
     if (!lines.length && !tStd.length) return;
     body += "<p><strong>" + esc(s) + "</strong></p>";
     if (lines.length) body += "<p>" + lines.map(x => esc(x)).join("<br>") + "</p>";
-    if (tStd.length) body += "<p>Standards we worked on: " + tStd.map(x => esc(x[1]) + " — " + esc(x[2])).join("; ") + "</p>";
+    if (tStd.length) body += "<p>Standards we worked on: " + tStd.map(x => esc(x[1]) + (isSampleCode(x[1]) ? " (SAMPLE)" : "") + " — " + esc(x[2])).join("; ") + "</p>";
     const nt = S.notes[pk(g, s, UI.tWeek)];
     if (nt) body += "<p>" + esc(nt) + "</p>";
   });
@@ -451,7 +492,15 @@ function renderSetup() {
     }).join(" ");
     const resChips = res.length ? res.map(r => '<span class="chip">' + esc(r.title) + " (" + esc(r.kind) + ') <button data-action="del-resource" data-subject="' + esc(s) + '" data-id="' + r.id + '">×</button></span>').join("") : '<span class="note">No resources yet.</span>';
     const stdList = (S.standards && S.standards[key]) || [];
-    const stdHtml = stdList.length ? stdList.map(r => '<div style="margin:4px 0;"><strong>' + esc(r[1]) + '</strong> <span class="note">(' + esc(r[0]) + ')</span> — ' + esc(r[2]) + ' <button class="small gray" data-action="del-standard" data-subject="' + esc(s) + '" data-code="' + esc(r[1]) + '">Remove</button></div>').join("") : '<p class="note">No standards yet for this subject.</p>';
+    const stdHtml = stdList.length ? stdList.map(r => '<div style="margin:4px 0;"><strong>' + esc(r[1]) + '</strong>' + (isSampleCode(r[1]) ? sampleTag() : "") + ' <span class="note">(' + esc(r[0]) + ')</span> — ' + esc(r[2]) + ' <button class="small gray" data-action="del-standard" data-subject="' + esc(s) + '" data-code="' + esc(r[1]) + '">Remove</button></div>').join("") : '<p class="note">No standards yet for this subject.</p>';
+    const nSamples = stdList.filter(r => isSampleCode(r[1])).length;
+    const sampleCtl = SAMPLE_STANDARDS[s]
+      ? (!stdList.length
+        ? '<p style="margin:10px 0 4px;"><button data-action="load-samples" data-subject="' + esc(s) + '">Load SAMPLE standards</button> <span class="note">6 clearly-labeled examples to try standards tracking — plainly marked SAMPLE everywhere, not real DOC standards.</span></p>'
+        : (nSamples
+          ? '<p style="margin:10px 0 4px;"><button data-action="remove-samples" data-subject="' + esc(s) + '" class="gray">Remove SAMPLE standards</button> <span class="note">Removes all ' + nSamples + ' SAMPLE rows for this subject in one click. Real standards are untouched.</span></p>'
+          : ""))
+      : "";
     return '<div class="card"><div class="row"><h3 style="margin:0;">' + esc(s) + '</h3><button class="small gray" data-action="del-subject" data-subject="' + esc(s) + '">Remove subject</button></div>' +
       '<p style="margin:6px 0;"><label>Teaching days: </label>' + dayChecks + "</p>" +
       '<p style="margin:6px 0;"><label>Resources: </label>' + resChips + "</p>" +
@@ -461,7 +510,7 @@ function renderSetup() {
       '<p style="margin:12px 0 4px;"><label>Standards — paste, one per line, in this order: Strand, Code, Standard. Separate the three parts with tabs, | pipes, or commas. Example: Number Sense | 4.NS.1 | Read and write whole numbers to 1,000,000. Rows copied from the sheet\'s Standards tab work as-is.</label></p>' +
       stdHtml +
       '<div class="row"><textarea placeholder="One standard per line" style="flex:1; min-width:180px;"></textarea>' +
-      '<button data-action="add-standards" data-subject="' + esc(s) + '">Add standards</button></div></div>';
+      '<button data-action="add-standards" data-subject="' + esc(s) + '">Add standards</button></div>' + sampleCtl + '</div>';
   }).join("") : '<p class="note">No subjects for this grade yet. Add one below.</p>';
 }
 function renderTeacher() {
@@ -491,10 +540,10 @@ function renderTeacher() {
       '<label>Homework</label><textarea data-day="' + k + '" data-field="homework" placeholder="What goes home…">' + esc(d.homework) + "</textarea>" +
       '<div class="row" style="margin-top:8px;"><label>Resource <select data-day="' + k + '" data-field="resourceId">' + opts + "</select></label>" +
       '<label>Pages / chapters <input type="text" data-day="' + k + '" data-field="pages" value="' + esc(d.pages) + '" placeholder="e.g. pp. 42–45 or Ch. 3" style="width:190px;"></label></div></div>';
-  }).join("") : '<p class="note">No teaching days set for this subject. Set them on the Setup tab.</p>';
+  }).join("") : '<p class="note">No teaching days set for this subject. Pick at least one day in Teaching days above.</p>';
   const std = standardsFor(g, s);
   const n = std ? std.list.filter(x => (S.taught[x[1]] || []).length).length : 0;
-  $("#tProgressText").textContent = std ? n + " of " + std.list.length + " standards taught" : "Standards for this grade/subject are not loaded yet — add them on the Setup tab.";
+  $("#tProgressText").textContent = std ? n + " of " + std.list.length + " standards taught" : "Standards for this grade/subject are not loaded yet — add them on the Setup tab." + (SAMPLE_STANDARDS[s] ? " You can also load clearly-labeled SAMPLE standards there to try standards tracking." : "");
   $("#tProgressBar").style.width = std ? Math.round(n / std.list.length * 100) + "%" : "0%";
   if (std) {
     let html = "";
@@ -511,18 +560,19 @@ function renderTeacher() {
         const all = S.taught[x[1]] || [];
         const inW = datesInWeek(x[1], UI.tWeek);
         const weekDone = inW.length > 0;
-        html += '<div class="std' + (weekDone ? " done" : "") + '"><label style="font-weight:normal;"><input type="checkbox" data-taught="' + x[1] + '" ' + (weekDone ? "checked" : "") + "> <span class=\"code\">" + x[1] + "</span> — " + esc(x[2]) +
+        html += '<div class="std' + (weekDone ? " done" : "") + '"><label style="font-weight:normal;"><input type="checkbox" data-taught="' + x[1] + '" ' + (weekDone ? "checked" : "") + "> <span class=\"code\">" + x[1] + "</span>" + (isSampleCode(x[1]) ? sampleTag() : "") + " — " + esc(x[2]) +
           (weekDone ? ' <span class="taught">✓ Taught ' + esc(inW.map(fmtDate).join(", ")) + "</span>" : (all.length ? ' <span class="note">Taught ' + esc(all.map(fmtDate).join(", ")) + "</span>" : ' <span class="note">Not yet taught</span>')) + "</label></div>";
       });
     });
     $("#tStdList").innerHTML = html || '<p class="note">Nothing in this view yet.</p>';
   } else {
-    $("#tStdList").innerHTML = '<p class="note">Standards for ' + esc(g) + " " + esc(s) + " are not loaded yet. Add them on the Setup tab — paste them there, or paste rows into the sheet\'s Standards tab.</p>";
+    $("#tStdList").innerHTML = '<p class="note">Standards for ' + esc(g) + " " + esc(s) + " are not loaded yet. Add them on the Setup tab — paste them there, or paste rows into the sheet's Standards tab." + (SAMPLE_STANDARDS[s] ? " Or load clearly-labeled SAMPLE standards from the Setup tab to try standards tracking first." : "") + "</p>";
   }
   renderTeacherSummary();
   renderSubjectsEntered();
   renderWeekGlance();
   renderEmailDraft(false);
+  renderTeacherDays();
   renderTeacherResources();
   renderResourceManager();
   renderSub();
@@ -574,6 +624,21 @@ function renderWizard() {
       : "Demo link — it opens this browser's demo copy of the grade, not the sheet. In the connected app the link carries the sheet connection.";
     const dm = $("#wzDoneMsg"); if (dm) dm.textContent = "";
   }
+}
+function renderTeacherDays() {
+  // v9: the teacher changes this subject's own teaching days right here.
+  // The day cards follow the new days on the next render; plans written
+  // for a day that is unchecked stay saved and reappear if the day is
+  // checked again. The change handler (data-tday) saves via setDays.
+  const subj = $("#tDaysSubject");
+  if (subj) subj.textContent = UI.tSubject;
+  const box = $("#tDaysChecks");
+  if (!box) return;
+  const days = S.days[gk(UI.tGrade, UI.tSubject)] || [];
+  box.innerHTML = DAY_NAMES.map((name, idx) => {
+    const i = idx + 1;
+    return '<label style="font-weight:normal;"><input type="checkbox" data-tday="' + i + '" ' + (days.includes(i) ? "checked" : "") + "> " + name + "</label>";
+  }).join(" ");
 }
 function renderTeacherResources() {
   const subj = $("#tResSubject");
@@ -714,7 +779,7 @@ function weekSummaryHtml(g, week) {
     if (tStd.length) {
       html += "<p><strong>Standards taught this week:</strong></p><ul>" + tStd.map(x => {
         const ds = (S.taught[x[1]] || []).filter(dt => dt >= wr[0] && dt <= wr[1]).map(fmtDate).join(", ");
-        return "<li><strong>" + esc(x[1]) + "</strong> (" + esc(ds) + ") — " + esc(x[2]) + "</li>";
+        return "<li><strong>" + esc(x[1]) + "</strong>" + (isSampleCode(x[1]) ? sampleTag() : "") + " (" + esc(ds) + ") — " + esc(x[2]) + "</li>";
       }).join("") + "</ul>";
     }
     const ent = (S.entered[g + "|" + week] || {})[s];
@@ -827,14 +892,15 @@ function renderPrincipal() {
     html += "<h3>Standards taught in this period</h3>" + taughtRows.map(c => {
       const st = findStd(c);
       const ds = (S.taught[c] || []).filter(inR).map(fmtDate).join(", ");
-      return "<p><strong>" + c + "</strong> — " + esc(ds) + (st ? " — " + esc(st[2].slice(0, 80)) + (st[2].length > 80 ? "…" : "") : "") + "</p>";
+      return "<p><strong>" + c + "</strong>" + (isSampleCode(c) ? sampleTag() : "") + " — " + esc(ds) + (st ? " — " + esc(st[2].slice(0, 80)) + (st[2].length > 80 ? "…" : "") : "") + "</p>";
     }).join("");
   }
   grades.forEach(g => (S.subjects[g] || []).forEach(s => {
     const list = (S.standards && S.standards[gk(g, s)]) || [];
     if (!list.length) return;
     const n = list.filter(x => (S.taught[x[1]] || []).length).length;
-    html += "<p><strong>" + esc(g) + " " + esc(s) + ":</strong> " + n + " of " + list.length + " standards taught overall.</p>";
+    const nS = list.filter(x => isSampleCode(x[1])).length;
+    html += "<p><strong>" + esc(g) + " " + esc(s) + ":</strong> " + n + " of " + list.length + " standards taught overall." + (nS ? " Includes " + nS + " SAMPLE standard" + (nS > 1 ? "s" : "") + " (not DOC standards)." : "") + "</p>";
   }));
   if (!any) html += "<p><em>Nothing planned or taught in this period yet.</em></p>";
   // Weeks with plans outside the chosen period — the usual reason a
@@ -1189,6 +1255,37 @@ document.addEventListener("click", e => {
     save(); gasPost({ action: "delStandard", grade: UI.sGrade, subject: s, code: code });
     renderSetup(); renderTeacher();
   }
+  else if (act === "load-samples") {
+    // v9: load the small set of plainly fake SAMPLE standards for a subject
+    // that has none. They are ordinary Standards rows (code SAMPLE-...),
+    // so addStandard/delStandard and the sheet need no change.
+    const s = b.dataset.subject, key = gk(UI.sGrade, s);
+    const set = SAMPLE_STANDARDS[s] || [];
+    if (!S.standards[key]) S.standards[key] = [];
+    const have = new Set(S.standards[key].map(x => x[1]));
+    let added = 0;
+    set.forEach(r => {
+      if (have.has(r[1])) return;
+      have.add(r[1]); S.standards[key].push([r[0], r[1], r[2]]); added++;
+      gasPost({ action: "addStandard", grade: UI.sGrade, subject: s, strand: r[0], code: r[1], standard: r[2] });
+    });
+    save();
+    const msg = $("#setupMsg");
+    if (msg) msg.textContent = added
+      ? "Loaded " + added + " SAMPLE standards for " + UI.sGrade + " " + s + " — clearly labeled SAMPLE everywhere, not real DOC standards. Remove them in one click below."
+      : "SAMPLE standards for " + UI.sGrade + " " + s + " are already loaded.";
+    renderSetup(); renderTeacher();
+  }
+  else if (act === "remove-samples") {
+    const s = b.dataset.subject, key = gk(UI.sGrade, s);
+    const removed = (S.standards[key] || []).filter(x => isSampleCode(x[1]));
+    S.standards[key] = (S.standards[key] || []).filter(x => !isSampleCode(x[1]));
+    removed.forEach(x => gasPost({ action: "delStandard", grade: UI.sGrade, subject: s, code: x[1] }));
+    save();
+    const msg = $("#setupMsg");
+    if (msg) msg.textContent = "Removed " + removed.length + " SAMPLE standard" + (removed.length === 1 ? "" : "s") + " from " + UI.sGrade + " " + s + ". Real standards were untouched.";
+    renderSetup(); renderTeacher();
+  }
   else if (act === "add-standards") {
     const s = b.dataset.subject, key = gk(UI.sGrade, s);
     const card = b.closest(".card");
@@ -1378,6 +1475,25 @@ document.addEventListener("change", e => {
     save();
     gasPost({ action: "setDays", grade: UI.sGrade, subject: s, days: S.days[key].join(",") });
     renderSetup(); renderTeacher();
+  }
+  else if (t.dataset.tday) {
+    // v9: the teacher changes this subject's own teaching days. The last
+    // day cannot go — a subject with no days has nowhere to plan.
+    const i = Number(t.dataset.tday);
+    const key = gk(UI.tGrade, UI.tSubject);
+    const cur = S.days[key] || [];
+    if (!t.checked && cur.length <= 1) {
+      const m = $("#tDaysMsg");
+      if (m) m.textContent = "Keep at least one teaching day for " + UI.tSubject + ".";
+      renderTeacher();
+      return;
+    }
+    S.days[key] = t.checked ? [...cur, i].sort((a, b) => a - b) : cur.filter(x => x !== i);
+    save();
+    gasPost({ action: "setDays", grade: UI.tGrade, subject: UI.tSubject, days: S.days[key].join(",") });
+    renderTeacher();
+    const m2 = $("#tDaysMsg");
+    if (m2) m2.textContent = "Teaching days saved ✓ — " + UI.tSubject + " is now " + S.days[key].map(d => DAY_NAMES[d - 1]).join(", ") + ".";
   }
   else if (t.dataset.taught) {
     const code = t.dataset.taught;
